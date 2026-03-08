@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, User, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc, getDocs, limit } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Category, Content, ContentType, Favorite } from './types';
 import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle } from 'lucide-react';
@@ -13,18 +13,31 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const handleLogin = async () => {
+  const handleLoginPopup = async () => {
     setLoginError(null);
     const provider = new GoogleAuthProvider();
     try {
+      await setPersistence(auth, browserLocalPersistence);
       await signInWithPopup(auth, provider);
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error("Login popup error:", error);
       if (error.code === 'auth/popup-blocked') {
-        setLoginError("O login foi bloqueado pelo seu navegador. Por favor, permita popups para este site.");
+        setLoginError("O popup foi bloqueado. Tente o botão 'Alternativo' (redirecionamento).");
       } else {
-        setLoginError("Ocorreu um erro ao tentar entrar. Tente novamente.");
+        setLoginError("Erro ao entrar. Tente o método alternativo.");
       }
+    }
+  };
+
+  const handleLoginRedirect = async () => {
+    setLoginError(null);
+    const provider = new GoogleAuthProvider();
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithRedirect(auth, provider);
+    } catch (error) {
+      console.error("Login redirect error:", error);
+      setLoginError("Erro ao iniciar redirecionamento.");
     }
   };
 
@@ -33,9 +46,9 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
       {loginError && (
-        <div className="bg-red-600 text-white text-center py-2 text-sm font-medium animate-in fade-in slide-in-from-top-4">
-          {loginError}
-          <button onClick={() => setLoginError(null)} className="ml-4 underline">Fechar</button>
+        <div className="bg-red-600 text-white text-center py-2 text-sm font-medium px-4 flex items-center justify-center">
+          <span>{loginError}</span>
+          <button onClick={() => setLoginError(null)} className="ml-4 bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-xs">Fechar</button>
         </div>
       )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -68,9 +81,14 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
                 </button>
               </div>
             ) : (
-              <button onClick={handleLogin} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center">
-                <LogIn className="w-4 h-4 mr-2" /> Entrar
-              </button>
+              <div className="flex items-center space-x-2">
+                <button onClick={handleLoginPopup} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center">
+                  <LogIn className="w-4 h-4 mr-2" /> Entrar
+                </button>
+                <button onClick={handleLoginRedirect} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors">
+                  Alternativo
+                </button>
+              </div>
             )}
           </div>
 
@@ -99,7 +117,10 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
               <button onClick={handleLogout} className="text-red-600 font-medium">Sair</button>
             </div>
           ) : (
-            <button onClick={handleLogin} className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium">Entrar</button>
+            <div className="space-y-2 pt-2">
+              <button onClick={handleLoginPopup} className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium">Entrar</button>
+              <button onClick={handleLoginRedirect} className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm">Entrar (Alternativo)</button>
+            </div>
           )}
         </div>
       )}
@@ -112,12 +133,23 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 const Home = ({ categories, user }: { categories: Category[], user: User | null }) => {
   const [search, setSearch] = useState('');
 
-  const handleLogin = async () => {
+  const handleLoginPopup = async () => {
     const provider = new GoogleAuthProvider();
     try {
+      await setPersistence(auth, browserLocalPersistence);
       await signInWithPopup(auth, provider);
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Login popup error:", error);
+    }
+  };
+
+  const handleLoginRedirect = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithRedirect(auth, provider);
+    } catch (error) {
+      console.error("Login redirect error:", error);
     }
   };
   
@@ -134,12 +166,20 @@ const Home = ({ categories, user }: { categories: Category[], user: User | null 
             <h2 className="text-2xl font-bold mb-2">Bem-vindo ao EduHub!</h2>
             <p className="text-indigo-100">Faça login para acessar seus conteúdos favoritos e acompanhar seu progresso.</p>
           </div>
-          <button 
-            onClick={handleLogin}
-            className="bg-white text-indigo-600 px-8 py-3 rounded-2xl font-bold hover:bg-indigo-50 transition-colors flex items-center shadow-lg"
-          >
-            <LogIn className="w-5 h-5 mr-2" /> Entrar com Google
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button 
+              onClick={handleLoginPopup}
+              className="bg-white text-indigo-600 px-8 py-3 rounded-2xl font-bold hover:bg-indigo-50 transition-colors flex items-center shadow-lg"
+            >
+              <LogIn className="w-5 h-5 mr-2" /> Entrar com Google
+            </button>
+            <button 
+              onClick={handleLoginRedirect}
+              className="bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-400 transition-colors flex items-center border border-indigo-400"
+            >
+              Método Alternativo
+            </button>
+          </div>
         </div>
       )}
 
@@ -381,12 +421,40 @@ const ContentDetail = ({ contents }: { contents: Content[] }) => {
 
 const Admin = ({ categories, contents, isAdmin }: { categories: Category[], contents: Content[], isAdmin: boolean }) => {
   const [activeTab, setActiveTab] = useState<'categories' | 'contents'>('categories');
+  const [debugStatus, setDebugStatus] = useState<string | null>(null);
   
   // Forms
   const [catForm, setCatForm] = useState({ name: '', description: '', imageUrl: '' });
   const [contForm, setContForm] = useState({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '' });
 
-  if (!isAdmin) return <Navigate to="/" />;
+  const testConnection = async () => {
+    setDebugStatus("Testando...");
+    try {
+      const q = query(collection(db, 'categories'), limit(1));
+      await getDocs(q);
+      setDebugStatus("Conexão com Banco de Dados: OK!");
+    } catch (error: any) {
+      console.error("Debug connection error:", error);
+      setDebugStatus(`Erro: ${error.message}`);
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-md mx-auto mt-20 p-8 bg-white rounded-3xl shadow-xl text-center border border-gray-100">
+        <Settings className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h2>
+        <p className="text-gray-500 mb-6">Você precisa estar logado como administrador para acessar esta página.</p>
+        <Link to="/" className="text-indigo-600 font-bold hover:underline">Voltar para o Início</Link>
+        
+        <div className="mt-10 pt-6 border-t border-gray-100">
+          <p className="text-xs text-gray-400 mb-2">Ferramenta de Diagnóstico:</p>
+          <button onClick={testConnection} className="text-xs bg-gray-100 px-3 py-1 rounded hover:bg-gray-200">Testar Conexão</button>
+          {debugStatus && <p className="mt-2 text-[10px] font-mono text-gray-500">{debugStatus}</p>}
+        </div>
+      </div>
+    );
+  }
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -643,6 +711,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          console.log("Redirect login success:", result.user.email);
+        }
+      } catch (error) {
+        console.error("Redirect result error:", error);
+      }
+    };
+    checkRedirect();
+
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAdmin(u?.email === 'edsonfinanceiro2017@gmail.com');
