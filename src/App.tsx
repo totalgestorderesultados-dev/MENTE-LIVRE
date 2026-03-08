@@ -22,9 +22,11 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
     } catch (error: any) {
       console.error("Login popup error:", error);
       if (error.code === 'auth/popup-blocked') {
-        setLoginError("O popup foi bloqueado. Tente o botão 'Alternativo' (redirecionamento).");
+        setLoginError("O popup foi bloqueado. Tente o botão 'Alternativo' ao lado.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        setLoginError("Erro: Este domínio não está autorizado no Firebase. Por favor, me avise para eu corrigir.");
       } else {
-        setLoginError("Erro ao entrar. Tente o método alternativo.");
+        setLoginError(`Erro: ${error.message || "Falha ao entrar"}`);
       }
     }
   };
@@ -35,9 +37,9 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
     try {
       await setPersistence(auth, browserLocalPersistence);
       await signInWithRedirect(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login redirect error:", error);
-      setLoginError("Erro ao iniciar redirecionamento.");
+      setLoginError(`Erro Redirecionamento: ${error.message}`);
     }
   };
 
@@ -81,9 +83,20 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
                 </button>
               </div>
             ) : (
-              <button onClick={handleLoginPopup} className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Login Administrativo">
-                <Settings className="w-5 h-5" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button onClick={handleLoginPopup} className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Login Administrativo">
+                  <Settings className="w-5 h-5" />
+                </button>
+                <button onClick={handleLoginRedirect} className="text-[10px] text-gray-400 hover:text-indigo-600 font-medium" title="Login Alternativo">
+                  Alternativo
+                </button>
+                <button 
+                  onClick={() => alert("Dicas de Login:\n1. Use o botão 'Alternativo' se o principal não abrir.\n2. Não use modo Incógnito/Privado.\n3. Certifique-se de estar usando o e-mail: edsonfinanceiro2017@gmail.com")}
+                  className="text-[10px] text-gray-300 hover:text-gray-500"
+                >
+                  Ajuda?
+                </button>
+              </div>
             )}
           </div>
 
@@ -401,13 +414,22 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
       <div className="max-w-md mx-auto mt-20 p-8 bg-white rounded-3xl shadow-xl text-center border border-gray-100">
         <Settings className="w-12 h-12 text-gray-300 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h2>
-        <p className="text-gray-500 mb-6">Você precisa estar logado como administrador para acessar esta página.</p>
+        <p className="text-gray-500 mb-2">Você precisa estar logado como administrador para acessar esta página.</p>
+        {auth.currentUser ? (
+          <div className="mb-6 p-3 bg-amber-50 rounded-xl border border-amber-100">
+            <p className="text-xs text-amber-700">Logado como:</p>
+            <p className="text-sm font-bold text-amber-900">{auth.currentUser.email}</p>
+            <p className="text-[10px] text-amber-600 mt-1">Este e-mail não tem permissão de administrador.</p>
+          </div>
+        ) : (
+          <p className="text-sm text-red-500 mb-6 font-medium">Você não está logado.</p>
+        )}
         <Link to="/" className="text-indigo-600 font-bold hover:underline">Voltar para o Início</Link>
         
         <div className="mt-10 pt-6 border-t border-gray-100">
           <p className="text-xs text-gray-400 mb-2">Ferramenta de Diagnóstico:</p>
           <button onClick={testConnection} className="text-xs bg-gray-100 px-3 py-1 rounded hover:bg-gray-200">Testar Conexão</button>
-          {debugStatus && <p className="mt-2 text-[10px] font-mono text-gray-500">{debugStatus}</p>}
+          {debugStatus && <p className="mt-2 text-[10px] font-mono text-gray-500 break-all">{debugStatus}</p>}
         </div>
       </div>
     );
@@ -729,8 +751,12 @@ export default function App() {
         if (result?.user) {
           console.log("Redirect login success:", result.user.email);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Redirect result error:", error);
+        // We don't want to show this error on every page load if it's just a "no result" error
+        if (error.code !== 'auth/no-auth-event') {
+          alert(`Erro no login alternativo: ${error.message}`);
+        }
       }
     };
     checkRedirect();
