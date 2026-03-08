@@ -9,6 +9,7 @@ export interface Category {
   description: string;
   imageUrl?: string;
   order?: number;
+  isVisible?: boolean;
 }
 
 export interface Content {
@@ -19,6 +20,7 @@ export interface Content {
   type: ContentType;
   url: string;
   createdAt: string;
+  status?: 'free' | 'hidden';
 }
 
 export interface Favorite {

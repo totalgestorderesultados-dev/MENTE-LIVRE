@@ -20,6 +20,10 @@
         "order": {
           "type": "integer",
           "description": "Display order"
+        },
+        "isVisible": {
+          "type": "boolean",
+          "description": "Whether the category is visible to users"
         }
       },
       "required": ["name", "description"]
@@ -54,6 +58,11 @@
           "type": "string",
           "format": "date-time",
           "description": "Creation timestamp"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["free", "hidden"],
+          "description": "Visibility status of the content"
         }
       },
       "required": ["categoryId", "title", "type", "url"]

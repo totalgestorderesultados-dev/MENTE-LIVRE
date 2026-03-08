@@ -81,14 +81,9 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center space-x-2">
-                <button onClick={handleLoginPopup} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center">
-                  <LogIn className="w-4 h-4 mr-2" /> Entrar
-                </button>
-                <button onClick={handleLoginRedirect} className="bg-gray-100 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium hover:bg-gray-200 transition-colors">
-                  Alternativo
-                </button>
-              </div>
+              <button onClick={handleLoginPopup} className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Login Administrativo">
+                <Settings className="w-5 h-5" />
+              </button>
             )}
           </div>
 
@@ -117,9 +112,10 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
               <button onClick={handleLogout} className="text-red-600 font-medium">Sair</button>
             </div>
           ) : (
-            <div className="space-y-2 pt-2">
-              <button onClick={handleLoginPopup} className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium">Entrar</button>
-              <button onClick={handleLoginRedirect} className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-lg font-medium text-sm">Entrar (Alternativo)</button>
+            <div className="pt-4 border-t border-gray-100">
+              <button onClick={handleLoginPopup} className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center">
+                <Settings className="w-4 h-4 mr-2" /> Login Administrativo
+              </button>
             </div>
           )}
         </div>
@@ -130,59 +126,18 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 
 // --- Pages ---
 
-const Home = ({ categories, user }: { categories: Category[], user: User | null }) => {
+const Home = ({ categories, user, isAdmin }: { categories: Category[], user: User | null, isAdmin: boolean }) => {
   const [search, setSearch] = useState('');
-
-  const handleLoginPopup = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login popup error:", error);
-    }
-  };
-
-  const handleLoginRedirect = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithRedirect(auth, provider);
-    } catch (error) {
-      console.error("Login redirect error:", error);
-    }
-  };
   
-  const filteredCategories = categories.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.description.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCategories = categories.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || 
+                         c.description.toLowerCase().includes(search.toLowerCase());
+    const isVisible = isAdmin || c.isVisible !== false;
+    return matchesSearch && isVisible;
+  });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {!user && (
-        <div className="mb-12 bg-indigo-600 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
-          <div className="mb-6 md:mb-0 text-center md:text-left">
-            <h2 className="text-2xl font-bold mb-2">Bem-vindo ao EduHub!</h2>
-            <p className="text-indigo-100">Faça login para acessar seus conteúdos favoritos e acompanhar seu progresso.</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button 
-              onClick={handleLoginPopup}
-              className="bg-white text-indigo-600 px-8 py-3 rounded-2xl font-bold hover:bg-indigo-50 transition-colors flex items-center shadow-lg"
-            >
-              <LogIn className="w-5 h-5 mr-2" /> Entrar com Google
-            </button>
-            <button 
-              onClick={handleLoginRedirect}
-              className="bg-indigo-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-400 transition-colors flex items-center border border-indigo-400"
-            >
-              Método Alternativo
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="mb-10 text-center">
         <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">O que você quer aprender hoje?</h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">Explore nossas categorias e encontre o conteúdo ideal para o seu desenvolvimento.</p>
@@ -239,16 +194,18 @@ const Home = ({ categories, user }: { categories: Category[], user: User | null 
   );
 };
 
-const CategoryDetail = ({ categories, contents, favorites, user }: { categories: Category[], contents: Content[], favorites: Favorite[], user: User | null }) => {
+const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { categories: Category[], contents: Content[], favorites: Favorite[], user: User | null, isAdmin: boolean }) => {
   const { id } = useParams();
   const category = categories.find(c => c.id === id);
   const categoryContents = contents.filter(c => c.categoryId === id);
   const [search, setSearch] = useState('');
 
-  const filteredContents = categoryContents.filter(c => 
-    c.title.toLowerCase().includes(search.toLowerCase()) || 
-    c.description.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredContents = categoryContents.filter(c => {
+    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
+                         c.description.toLowerCase().includes(search.toLowerCase());
+    const isVisible = isAdmin || c.status !== 'hidden';
+    return matchesSearch && isVisible;
+  });
 
   const isFavorite = (contentId: string) => favorites.some(f => f.contentId === contentId);
 
@@ -424,8 +381,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   const [debugStatus, setDebugStatus] = useState<string | null>(null);
   
   // Forms
-  const [catForm, setCatForm] = useState({ name: '', description: '', imageUrl: '' });
-  const [contForm, setContForm] = useState({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '' });
+  const [catForm, setCatForm] = useState({ name: '', description: '', imageUrl: '', isVisible: true });
+  const [contForm, setContForm] = useState({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '', status: 'free' as 'free' | 'hidden' });
 
   const testConnection = async () => {
     setDebugStatus("Testando...");
@@ -460,14 +417,22 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     e.preventDefault();
     if (!catForm.name) return;
     await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
-    setCatForm({ name: '', description: '', imageUrl: '' });
+    setCatForm({ name: '', description: '', imageUrl: '', isVisible: true });
   };
 
   const handleAddContent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contForm.categoryId || !contForm.title || !contForm.url) return;
     await addDoc(collection(db, 'contents'), { ...contForm, createdAt: new Date().toISOString() });
-    setContForm({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '' });
+    setContForm({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '', status: 'free' });
+  };
+
+  const toggleCategoryVisibility = async (id: string, current: boolean) => {
+    await updateDoc(doc(db, 'categories', id), { isVisible: !current });
+  };
+
+  const toggleContentStatus = async (id: string, current: 'free' | 'hidden') => {
+    await updateDoc(doc(db, 'contents', id), { status: current === 'free' ? 'hidden' : 'free' });
   };
 
   const handleDelete = async (coll: string, id: string) => {
@@ -480,11 +445,11 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     if (categories.length > 0) return;
     
     const initialCategories = [
-      { name: 'Desenvolvimento Pessoal', description: 'Cursos para melhorar sua produtividade, mentalidade e hábitos.', order: 0 },
-      { name: 'Estudos Bíblicos', description: 'Aprofunde seu conhecimento nas escrituras com materiais exclusivos.', order: 1 },
-      { name: 'Finanças', description: 'Aprenda a gerir seu dinheiro, investir e alcançar a liberdade financeira.', order: 2 },
-      { name: 'Liderança', description: 'Desenvolva habilidades de gestão e influência para liderar equipes.', order: 3 },
-      { name: 'Cursos Técnicos', description: 'Aprenda novas profissões e habilidades práticas.', order: 4 }
+      { name: 'Desenvolvimento Pessoal', description: 'Cursos para melhorar sua produtividade, mentalidade e hábitos.', order: 0, isVisible: true },
+      { name: 'Estudos Bíblicos', description: 'Aprofunde seu conhecimento nas escrituras com materiais exclusivos.', order: 1, isVisible: true },
+      { name: 'Finanças', description: 'Aprenda a gerir seu dinheiro, investir e alcançar a liberdade financeira.', order: 2, isVisible: true },
+      { name: 'Liderança', description: 'Desenvolva habilidades de gestão e influência para liderar equipes.', order: 3, isVisible: true },
+      { name: 'Cursos Técnicos', description: 'Aprenda novas profissões e habilidades práticas.', order: 4, isVisible: true }
     ];
 
     for (const cat of initialCategories) {
@@ -553,6 +518,17 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                     onChange={e => setCatForm({...catForm, imageUrl: e.target.value})}
                   />
                 </div>
+                <div>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                      checked={catForm.isVisible}
+                      onChange={e => setCatForm({...catForm, isVisible: e.target.checked})}
+                    />
+                    <span className="text-sm font-medium text-gray-700">Visível para alunos</span>
+                  </label>
+                </div>
                 <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
                   Criar Categoria
                 </button>
@@ -565,6 +541,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Nome</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Ações</th>
                   </tr>
                 </thead>
@@ -574,6 +551,17 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                       <td className="px-6 py-4">
                         <div className="font-bold text-gray-900">{cat.name}</div>
                         <div className="text-xs text-gray-500 truncate max-w-xs">{cat.description}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button 
+                          onClick={() => toggleCategoryVisibility(cat.id, cat.isVisible !== false)}
+                          className={cn(
+                            "px-2 py-1 rounded text-[10px] font-bold uppercase",
+                            cat.isVisible !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                          )}
+                        >
+                          {cat.isVisible !== false ? 'Visível' : 'Oculto'}
+                        </button>
                       </td>
                       <td className="px-6 py-4">
                         <button onClick={() => handleDelete('categories', cat.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors">
@@ -652,6 +640,18 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                     onChange={e => setContForm({...contForm, description: e.target.value})}
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status de Visibilidade</label>
+                  <select 
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    value={contForm.status}
+                    onChange={e => setContForm({...contForm, status: e.target.value as 'free' | 'hidden'})}
+                    required
+                  >
+                    <option value="free">Livre (Visível)</option>
+                    <option value="hidden">Oculto</option>
+                  </select>
+                </div>
                 <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
                   Adicionar Conteúdo
                 </button>
@@ -665,6 +665,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   <tr>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Título</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Tipo</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Ações</th>
                   </tr>
                 </thead>
@@ -682,6 +683,17 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                         )}>
                           {cont.type}
                         </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button 
+                          onClick={() => toggleContentStatus(cont.id, cont.status || 'free')}
+                          className={cn(
+                            "px-2 py-1 rounded text-[10px] font-bold uppercase",
+                            cont.status !== 'hidden' ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-700"
+                          )}
+                        >
+                          {cont.status !== 'hidden' ? 'Livre' : 'Oculto'}
+                        </button>
                       </td>
                       <td className="px-6 py-4">
                         <button onClick={() => handleDelete('contents', cont.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors">
@@ -778,8 +790,8 @@ export default function App() {
         
         <main className="pb-20">
           <Routes>
-            <Route path="/" element={<Home categories={categories} user={user} />} />
-            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} />} />
+            <Route path="/" element={<Home categories={categories} user={user} isAdmin={isAdmin} />} />
+            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} isAdmin={isAdmin} />} />
             <Route path="/content/:id" element={<ContentDetail contents={contents} />} />
             <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} />} />
             <Route path="*" element={<Navigate to="/" />} />
