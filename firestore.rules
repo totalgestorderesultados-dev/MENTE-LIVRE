@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email == "edsonfinanceiro2017@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    function isValidCategory(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.description is string && data.description.size() < 500 &&
+             (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 1000));
+    }
+
+    function isValidContent(data) {
+      return data.categoryId is string &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.description is string && data.description.size() < 1000 &&
+             data.type in ['video', 'pdf'] &&
+             data.url is string && data.url.size() < 1000;
+    }
+
+    function isValidFavorite(data) {
+      return data.userId == request.auth.uid &&
+             data.contentId is string;
+    }
+
+    // Categories: Publicly readable, Admin writable
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() && isValidCategory(request.resource.data);
+    }
+
+    // Contents: Publicly readable, Admin writable
+    match /contents/{contentId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin() && isValidContent(request.resource.data);
+    }
+
+    // Favorites: Owner readable/writable
+    match /favorites/{favoriteId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidFavorite(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}

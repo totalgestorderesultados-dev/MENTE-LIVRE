@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "A course category",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the category"
+        },
+        "description": {
+          "type": "string",
+          "description": "A short description of the category"
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Optional image URL for the category"
+        },
+        "order": {
+          "type": "integer",
+          "description": "Display order"
+        }
+      },
+      "required": ["name", "description"]
+    },
+    "Content": {
+      "title": "Content",
+      "description": "An educational content item (video or PDF)",
+      "type": "object",
+      "properties": {
+        "categoryId": {
+          "type": "string",
+          "description": "ID of the category this content belongs to"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the content"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the content"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["video", "pdf"],
+          "description": "Type of content"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL of the video (YouTube/Drive) or PDF"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["categoryId", "title", "type", "url"]
+    },
+    "Favorite": {
+      "title": "Favorite",
+      "description": "A user's favorite content",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "ID of the user"
+        },
+        "contentId": {
+          "type": "string",
+          "description": "ID of the content"
+        }
+      },
+      "required": ["userId", "contentId"]
+    }
+  },
+  "firestore": {
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Collection of course categories"
+    },
+    "/contents/{contentId}": {
+      "schema": "Content",
+      "description": "Collection of all course contents"
+    },
+    "/favorites/{favoriteId}": {
+      "schema": "Favorite",
+      "description": "Collection of user favorites"
+    }
+  }
+}
