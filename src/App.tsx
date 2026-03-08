@@ -4,7 +4,7 @@ import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectRes
 import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc, getDocs, limit } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Category, Content, ContentType, Favorite } from './types';
-import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle } from 'lucide-react';
+import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2 } from 'lucide-react';
 import { cn, getYouTubeId, getGoogleDriveEmbedUrl } from './utils';
 
 // --- Components ---
@@ -60,7 +60,7 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <BookOpen className="text-white w-5 h-5" />
               </div>
-              <span className="text-xl font-bold text-gray-900 tracking-tight">EduHub</span>
+              <span className="text-xl font-bold text-gray-900 tracking-tight">MindFlow</span>
             </Link>
           </div>
 
@@ -385,6 +385,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   // Forms
   const [catForm, setCatForm] = useState({ name: '', description: '', imageUrl: '', isVisible: true });
   const [contForm, setContForm] = useState({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '', status: 'free' as 'free' | 'hidden' });
+  const [editingCatId, setEditingCatId] = useState<string | null>(null);
+  const [editingContId, setEditingContId] = useState<string | null>(null);
 
   const testConnection = async () => {
     setDebugStatus("Testando...");
@@ -418,18 +420,52 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     );
   }
 
-  const handleAddCategory = async (e: React.FormEvent) => {
+  const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!catForm.name) return;
-    await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
+    
+    if (editingCatId) {
+      await updateDoc(doc(db, 'categories', editingCatId), catForm);
+      setEditingCatId(null);
+    } else {
+      await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
+    }
     setCatForm({ name: '', description: '', imageUrl: '', isVisible: true });
   };
 
-  const handleAddContent = async (e: React.FormEvent) => {
+  const handleSaveContent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contForm.categoryId || !contForm.title || !contForm.url) return;
-    await addDoc(collection(db, 'contents'), { ...contForm, createdAt: new Date().toISOString() });
+    
+    if (editingContId) {
+      await updateDoc(doc(db, 'contents', editingContId), contForm);
+      setEditingContId(null);
+    } else {
+      await addDoc(collection(db, 'contents'), { ...contForm, createdAt: new Date().toISOString() });
+    }
     setContForm({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '', status: 'free' });
+  };
+
+  const startEditCategory = (cat: Category) => {
+    setEditingCatId(cat.id);
+    setCatForm({ 
+      name: cat.name, 
+      description: cat.description, 
+      imageUrl: cat.imageUrl || '', 
+      isVisible: cat.isVisible !== false 
+    });
+  };
+
+  const startEditContent = (cont: Content) => {
+    setEditingContId(cont.id);
+    setContForm({ 
+      categoryId: cont.categoryId, 
+      title: cont.title, 
+      description: cont.description, 
+      type: cont.type, 
+      url: cont.url, 
+      status: cont.status || 'free' 
+    });
   };
 
   const toggleCategoryVisibility = async (id: string, current: boolean) => {
@@ -494,8 +530,11 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1">
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm sticky top-24">
-              <h2 className="text-lg font-bold mb-4 flex items-center"><Plus className="w-5 h-5 mr-2 text-indigo-600" /> Nova Categoria</h2>
-              <form onSubmit={handleAddCategory} className="space-y-4">
+              <h2 className="text-lg font-bold mb-4 flex items-center">
+                {editingCatId ? <Edit2 className="w-5 h-5 mr-2 text-amber-600" /> : <Plus className="w-5 h-5 mr-2 text-indigo-600" />}
+                {editingCatId ? 'Editar Categoria' : 'Nova Categoria'}
+              </h2>
+              <form onSubmit={handleSaveCategory} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome</label>
                   <input 
@@ -534,9 +573,20 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                     <span className="text-sm font-medium text-gray-700">Visível para alunos</span>
                   </label>
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
-                  Criar Categoria
-                </button>
+                <div className="flex space-x-2">
+                  <button type="submit" className={cn("flex-1 py-2 rounded-xl font-bold transition-colors", editingCatId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white")}>
+                    {editingCatId ? 'Salvar Alterações' : 'Criar Categoria'}
+                  </button>
+                  {editingCatId && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setEditingCatId(null); setCatForm({ name: '', description: '', imageUrl: '', isVisible: true }); }}
+                      className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
           </div>
@@ -569,9 +619,14 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                         </button>
                       </td>
                       <td className="px-6 py-4">
-                        <button onClick={() => handleDelete('categories', cat.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <button onClick={() => startEditCategory(cat)} className="text-amber-500 hover:text-amber-700 p-2 rounded-lg hover:bg-amber-50 transition-colors" title="Editar">
+                            <Edit2 className="w-5 h-5" />
+                          </button>
+                          <button onClick={() => handleDelete('categories', cat.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors" title="Excluir">
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -584,8 +639,11 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1">
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm sticky top-24">
-              <h2 className="text-lg font-bold mb-4 flex items-center"><Plus className="w-5 h-5 mr-2 text-indigo-600" /> Novo Conteúdo</h2>
-              <form onSubmit={handleAddContent} className="space-y-4">
+              <h2 className="text-lg font-bold mb-4 flex items-center">
+                {editingContId ? <Edit2 className="w-5 h-5 mr-2 text-amber-600" /> : <Plus className="w-5 h-5 mr-2 text-indigo-600" />}
+                {editingContId ? 'Editar Conteúdo' : 'Novo Conteúdo'}
+              </h2>
+              <form onSubmit={handleSaveContent} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Categoria</label>
                   <select 
@@ -657,9 +715,20 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                     <option value="hidden">Oculto</option>
                   </select>
                 </div>
-                <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
-                  Adicionar Conteúdo
-                </button>
+                <div className="flex space-x-2">
+                  <button type="submit" className={cn("flex-1 py-2 rounded-xl font-bold transition-colors", editingContId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white")}>
+                    {editingContId ? 'Salvar Alterações' : 'Adicionar Conteúdo'}
+                  </button>
+                  {editingContId && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setEditingContId(null); setContForm({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '', status: 'free' }); }}
+                      className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
           </div>
@@ -701,9 +770,14 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                         </button>
                       </td>
                       <td className="px-6 py-4">
-                        <button onClick={() => handleDelete('contents', cont.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center space-x-2">
+                          <button onClick={() => startEditContent(cont)} className="text-amber-500 hover:text-amber-700 p-2 rounded-lg hover:bg-amber-50 transition-colors" title="Editar">
+                            <Edit2 className="w-5 h-5" />
+                          </button>
+                          <button onClick={() => handleDelete('contents', cont.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors" title="Excluir">
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
