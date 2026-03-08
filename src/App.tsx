@@ -11,13 +11,20 @@ import { cn, getYouTubeId, getGoogleDriveEmbedUrl } from './utils';
 
 const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const handleLogin = async () => {
+    setLoginError(null);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login error:", error);
+      if (error.code === 'auth/popup-blocked') {
+        setLoginError("O login foi bloqueado pelo seu navegador. Por favor, permita popups para este site.");
+      } else {
+        setLoginError("Ocorreu um erro ao tentar entrar. Tente novamente.");
+      }
     }
   };
 
@@ -25,6 +32,12 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      {loginError && (
+        <div className="bg-red-600 text-white text-center py-2 text-sm font-medium animate-in fade-in slide-in-from-top-4">
+          {loginError}
+          <button onClick={() => setLoginError(null)} className="ml-4 underline">Fechar</button>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
@@ -96,8 +109,17 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 
 // --- Pages ---
 
-const Home = ({ categories }: { categories: Category[] }) => {
+const Home = ({ categories, user }: { categories: Category[], user: User | null }) => {
   const [search, setSearch] = useState('');
+
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Login error:", error);
+    }
+  };
   
   const filteredCategories = categories.filter(c => 
     c.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -106,6 +128,21 @@ const Home = ({ categories }: { categories: Category[] }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {!user && (
+        <div className="mb-12 bg-indigo-600 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between shadow-xl">
+          <div className="mb-6 md:mb-0 text-center md:text-left">
+            <h2 className="text-2xl font-bold mb-2">Bem-vindo ao EduHub!</h2>
+            <p className="text-indigo-100">Faça login para acessar seus conteúdos favoritos e acompanhar seu progresso.</p>
+          </div>
+          <button 
+            onClick={handleLogin}
+            className="bg-white text-indigo-600 px-8 py-3 rounded-2xl font-bold hover:bg-indigo-50 transition-colors flex items-center shadow-lg"
+          >
+            <LogIn className="w-5 h-5 mr-2" /> Entrar com Google
+          </button>
+        </div>
+      )}
+
       <div className="mb-10 text-center">
         <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">O que você quer aprender hoje?</h1>
         <p className="text-lg text-gray-600 max-w-2xl mx-auto">Explore nossas categorias e encontre o conteúdo ideal para o seu desenvolvimento.</p>
@@ -661,7 +698,7 @@ export default function App() {
         
         <main className="pb-20">
           <Routes>
-            <Route path="/" element={<Home categories={categories} />} />
+            <Route path="/" element={<Home categories={categories} user={user} />} />
             <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} />} />
             <Route path="/content/:id" element={<ContentDetail contents={contents} />} />
             <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} />} />
