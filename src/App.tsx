@@ -83,20 +83,9 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center space-x-2">
-                <button onClick={handleLoginPopup} className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Login Administrativo">
-                  <Settings className="w-5 h-5" />
-                </button>
-                <button onClick={handleLoginRedirect} className="text-[10px] text-gray-400 hover:text-indigo-600 font-medium" title="Login Alternativo">
-                  Alternativo
-                </button>
-                <button 
-                  onClick={() => alert("Dicas de Login:\n1. Use o botão 'Alternativo' se o principal não abrir.\n2. Não use modo Incógnito/Privado.\n3. Certifique-se de estar usando o e-mail: edsonfinanceiro2017@gmail.com")}
-                  className="text-[10px] text-gray-300 hover:text-gray-500"
-                >
-                  Ajuda?
-                </button>
-              </div>
+              <button onClick={handleLoginPopup} className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Login Administrativo">
+                <Settings className="w-5 h-5" />
+              </button>
             )}
           </div>
 
@@ -425,12 +414,6 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
           <p className="text-sm text-red-500 mb-6 font-medium">Você não está logado.</p>
         )}
         <Link to="/" className="text-indigo-600 font-bold hover:underline">Voltar para o Início</Link>
-        
-        <div className="mt-10 pt-6 border-t border-gray-100">
-          <p className="text-xs text-gray-400 mb-2">Ferramenta de Diagnóstico:</p>
-          <button onClick={testConnection} className="text-xs bg-gray-100 px-3 py-1 rounded hover:bg-gray-200">Testar Conexão</button>
-          {debugStatus && <p className="mt-2 text-[10px] font-mono text-gray-500 break-all">{debugStatus}</p>}
-        </div>
       </div>
     );
   }
