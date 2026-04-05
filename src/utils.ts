@@ -11,6 +11,12 @@ export function getYouTubeId(url: string) {
   return (match && match[2].length === 11) ? match[2] : null;
 }
 
+export function getYouTubePlaylistId(url: string) {
+  const regExp = /[&?]list=([^#&?]+)/;
+  const match = url.match(regExp);
+  return match ? match[1] : null;
+}
+
 export function getGoogleDriveEmbedUrl(url: string) {
   if (url.includes('drive.google.com')) {
     // Convert view link to embed link

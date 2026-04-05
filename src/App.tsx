@@ -5,7 +5,7 @@ import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, 
 import { auth, db } from './firebase';
 import { Category, Content, ContentType, Favorite } from './types';
 import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2 } from 'lucide-react';
-import { cn, getYouTubeId, getGoogleDriveEmbedUrl } from './utils';
+import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
 
 // --- Components ---
 
@@ -304,6 +304,20 @@ const ContentDetail = ({ contents }: { contents: Content[] }) => {
 
   const renderPlayer = () => {
     if (content.type === ContentType.VIDEO) {
+      const playlistId = getYouTubePlaylistId(content.url);
+      if (playlistId) {
+        return (
+          <div className="aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-2xl">
+            <iframe 
+              src={`https://www.youtube.com/embed/videoseries?list=${playlistId}`}
+              className="w-full h-full"
+              allowFullScreen
+              title={content.title}
+            />
+          </div>
+        );
+      }
+
       const ytId = getYouTubeId(content.url);
       if (ytId) {
         return (
@@ -686,14 +700,16 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">URL (YouTube / Drive / Direto)</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">URL (YouTube / Playlist / Drive)</label>
                   <input 
                     type="text" 
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    placeholder="Link do vídeo ou da playlist..."
                     value={contForm.url}
                     onChange={e => setContForm({...contForm, url: e.target.value})}
                     required
                   />
+                  <p className="text-[10px] text-gray-400 mt-1">Dica: Cole o link de uma playlist do YouTube para carregar todos os vídeos dela.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Descrição</label>
