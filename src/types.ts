@@ -12,6 +12,11 @@ export interface Category {
   isVisible?: boolean;
 }
 
+export interface ContentLink {
+  title: string;
+  url: string;
+}
+
 export interface Content {
   id: string;
   categoryId: string;
@@ -19,6 +24,7 @@ export interface Content {
   description: string;
   type: ContentType;
   url: string;
+  links?: ContentLink[];
   createdAt: string;
   status?: 'free' | 'hidden';
 }

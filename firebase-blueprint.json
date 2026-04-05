@@ -54,6 +54,18 @@
           "type": "string",
           "description": "URL of the video (YouTube/Drive) or PDF"
         },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": { "type": "string" },
+              "url": { "type": "string" }
+            },
+            "required": ["title", "url"]
+          },
+          "description": "List of links for this content"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
