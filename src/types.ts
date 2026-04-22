@@ -10,6 +10,7 @@ export interface Category {
   imageUrl?: string;
   order?: number;
   isVisible?: boolean;
+  accessLevel?: 'public' | 'private';
 }
 
 export interface ContentLink {
@@ -27,6 +28,7 @@ export interface Content {
   links?: ContentLink[];
   createdAt: string;
   status?: 'free' | 'hidden';
+  accessLevel?: 'public' | 'private';
 }
 
 export interface Favorite {

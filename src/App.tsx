@@ -4,10 +4,67 @@ import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectRes
 import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc, getDocs, limit } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { Category, Content, ContentLink, ContentType, Favorite } from './types';
-import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2 } from 'lucide-react';
+import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download } from 'lucide-react';
 import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
 
 // --- Components ---
+
+const PwaInstaller = () => {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsVisible(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    setDeferredPrompt(null);
+    setIsVisible(false);
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div className="bg-indigo-600 text-white px-4 py-3 flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top duration-500">
+      <div className="flex items-center space-x-3">
+        <div className="bg-white/20 p-2 rounded-xl">
+          <Download className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <p className="text-sm font-bold">Instalar MindFlow</p>
+          <p className="text-[10px] opacity-80">Acesse mais rápido direto da sua tela inicial!</p>
+        </div>
+      </div>
+      <div className="flex items-center space-x-2">
+        <button 
+          onClick={() => setIsVisible(false)}
+          className="text-white/60 hover:text-white px-3 py-1 text-xs font-medium"
+        >
+          Agora não
+        </button>
+        <button 
+          id="install-button"
+          onClick={handleInstall}
+          className="bg-white text-indigo-600 px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-50 transition-all shadow-sm"
+        >
+          Instalar agora
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -47,6 +104,7 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+      <PwaInstaller />
       {loginError && (
         <div className="bg-red-600 text-white text-center py-2 text-sm font-medium px-4 flex items-center justify-center">
           <span>{loginError}</span>
@@ -67,25 +125,35 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-4">
             <Link to="/" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Início</Link>
-            {isAdmin && (
-              <Link to="/admin" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium flex items-center">
-                <Settings className="w-4 h-4 mr-1" /> Painel
-              </Link>
-            )}
+            
             {user ? (
               <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full border border-gray-200" />
-                  <span className="text-sm font-medium text-gray-700">{user.displayName?.split(' ')[0]}</span>
+                {isAdmin && (
+                  <Link to="/admin" className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Painel Admin">
+                    <Settings className="w-5 h-5" />
+                  </Link>
+                )}
+                <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
+                  <img src={user.photoURL || ''} alt="" className="w-6 h-6 rounded-full border border-gray-200" />
+                  <span className="text-xs font-bold text-gray-700">{user.displayName?.split(' ')[0]}</span>
                 </div>
-                <button onClick={handleLogout} className="text-gray-500 hover:text-red-600 p-2 rounded-full transition-colors">
+                <button onClick={handleLogout} className="text-gray-400 hover:text-red-600 p-2 rounded-full transition-colors" title="Sair">
                   <LogOut className="w-5 h-5" />
                 </button>
               </div>
             ) : (
-              <button onClick={handleLoginPopup} className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Login Administrativo">
-                <Settings className="w-5 h-5" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button 
+                  onClick={handleLoginPopup} 
+                  className="flex items-center space-x-2 bg-indigo-600 text-white px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Entrar / Cadastro</span>
+                </button>
+                <button onClick={handleLoginPopup} className="text-gray-300 hover:text-indigo-400 p-1" title="Login Admin">
+                  <Settings className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
 
@@ -108,15 +176,18 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
           {user ? (
             <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full" />
-                <span className="font-medium text-gray-700">{user.displayName}</span>
+                <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full shadow-sm" />
+                <span className="font-bold text-gray-700">{user.displayName}</span>
               </div>
-              <button onClick={handleLogout} className="text-red-600 font-medium">Sair</button>
+              <button onClick={handleLogout} className="text-red-500 font-bold bg-red-50 px-4 py-2 rounded-xl text-sm">Sair</button>
             </div>
           ) : (
-            <div className="pt-4 border-t border-gray-100">
-              <button onClick={handleLoginPopup} className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center">
-                <Settings className="w-4 h-4 mr-2" /> Login Administrativo
+            <div className="pt-4 border-t border-gray-100 space-y-3">
+              <button onClick={handleLoginPopup} className="w-full bg-indigo-600 text-white px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg shadow-indigo-100">
+                <LogIn className="w-4 h-4 mr-2" /> Entrar / Cadastro
+              </button>
+              <button onClick={handleLoginPopup} className="w-full text-gray-400 text-xs py-2 flex items-center justify-center">
+                <Settings className="w-3 h-3 mr-1" /> Login Administrativo
               </button>
             </div>
           )}
@@ -138,6 +209,12 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
     return matchesSearch && isVisible;
   });
 
+  const [activeSegment, setActiveSegment] = useState<'public' | 'private'>('public');
+  
+  const displayedCategories = filteredCategories.filter(c => {
+    return c.accessLevel === activeSegment;
+  });
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-10 text-center">
@@ -154,34 +231,109 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        <div className="mt-8 flex justify-center">
+          <div className="inline-flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
+            {[
+              { id: 'public', label: 'Gratuito' },
+              { id: 'private', label: activeSegment === 'private' && !user ? 'Realizar Cadastro' : 'Exclusivo' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveSegment(tab.id as any)}
+                className={cn(
+                  "px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap",
+                  activeSegment === tab.id 
+                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200 scale-105" 
+                    : "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
+                )}
+              >
+                {tab.id === 'private' && activeSegment === 'private' && !user ? (
+                   <div className="flex items-center">
+                     <LogIn className="w-4 h-4 mr-2" />
+                     {tab.label}
+                   </div>
+                ) : tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-        {filteredCategories.map((category) => (
-          <Link 
-            key={category.id} 
-            to={`/category/${category.id}`}
-            className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
-          >
-            <div className="aspect-video bg-gray-100 relative overflow-hidden">
-              <img 
-                src={category.imageUrl || `https://picsum.photos/seed/${category.name}/800/450`} 
-                alt={category.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                referrerPolicy="no-referrer"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
-            </div>
-            <div className="p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name}</h3>
-              <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description}</p>
-              <div className="mt-4 flex items-center text-indigo-600 font-semibold text-sm">
-                Ver conteúdos <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+      {activeSegment === 'private' && !user ? (
+        <div className="bg-white rounded-3xl p-12 border border-gray-100 shadow-xl text-center max-w-2xl mx-auto py-16">
+          <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="text-indigo-600 w-10 h-10" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Área Exclusiva</h2>
+          <p className="text-gray-600 mb-8 leading-relaxed">
+            Cadastre-se ou entre com sua conta Google agora para acessar cursos premium, 
+            materiais exclusivos e salvar seus conteúdos favoritos.
+          </p>
+          <div className="flex flex-col space-y-4 items-center">
+            <button 
+              onClick={() => {
+                const nav = document.querySelector('nav');
+                const loginBtn = nav?.querySelector('button[onClick*="handleLoginPopup"]');
+                if (loginBtn instanceof HTMLButtonElement) loginBtn.click();
+                else alert("Clique no botão 'Entrar' no topo da página.");
+              }}
+              className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-105"
+            >
+              <LogIn className="w-5 h-5 mr-2" /> Começar Agora Gratuitamente
+            </button>
+            <p className="text-xs text-gray-400">Acesso instantâneo via conta Google.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {displayedCategories.map((category) => (
+            <Link 
+              key={category.id} 
+              to={category.accessLevel === 'private' && !user ? '#' : `/category/${category.id}`}
+              onClick={(e) => {
+                if (category.accessLevel === 'private' && !user) {
+                  e.preventDefault();
+                  alert("Esta categoria é exclusiva para membros. Por favor, faça login para acessar.");
+                }
+              }}
+              className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
+            >
+              {category.accessLevel === 'private' && (
+                <div className="absolute top-4 right-4 z-10">
+                  <div className="bg-white/90 backdrop-blur text-indigo-600 p-2 rounded-xl shadow-lg border border-white/20">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                </div>
+              )}
+              <div className="aspect-video bg-gray-100 relative overflow-hidden">
+                <img 
+                  src={category.imageUrl || `https://picsum.photos/seed/${category.name}/800/450`} 
+                  alt={category.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
               </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+              <div className="p-6">
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className={cn(
+                    "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
+                    category.accessLevel === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
+                  )}>
+                    {category.accessLevel === 'private' ? 'Exclusivo' : 'Público'}
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name}</h3>
+                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description}</p>
+                <div className="mt-4 flex items-center text-indigo-600 font-semibold text-sm">
+                  Ver conteúdos <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {filteredCategories.length === 0 && (
         <div className="text-center py-20">
@@ -262,7 +414,17 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
               {content.type === ContentType.VIDEO ? <Video className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-lg font-bold text-gray-900 truncate">{content.title}</h3>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-lg font-bold text-gray-900 truncate">{content.title}</h3>
+                {content.accessLevel === 'private' && (
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase",
+                    user ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
+                  )}>
+                    {user ? 'Acesso Liberado' : 'Premium'}
+                  </span>
+                )}
+              </div>
               <p className="text-gray-500 text-sm line-clamp-1">{content.description}</p>
             </div>
             <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
@@ -276,10 +438,23 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
                 <Star className={cn("w-5 h-5", isFavorite(content.id) && "fill-current")} />
               </button>
               <Link 
-                to={`/content/${content.id}`}
-                className="bg-gray-900 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-indigo-600 transition-colors flex items-center"
+                to={content.accessLevel === 'private' && !user ? '#' : `/content/${content.id}`}
+                onClick={(e) => {
+                  if (content.accessLevel === 'private' && !user) {
+                    e.preventDefault();
+                    alert("Acesso exclusivo para membros. Por favor, faça login.");
+                  }
+                }}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center",
+                  content.accessLevel === 'private' && !user 
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
+                    : "bg-gray-900 text-white hover:bg-indigo-600"
+                )}
               >
-                Abrir conteúdo <ChevronRight className="w-4 h-4 ml-1" />
+                {content.accessLevel === 'private' && !user ? <Lock className="w-4 h-4 mr-2" /> : null}
+                {content.accessLevel === 'private' && !user ? 'Bloqueado' : 'Abrir conteúdo'}
+                <ChevronRight className="w-4 h-4 ml-1" />
               </Link>
             </div>
           </div>
@@ -465,7 +640,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   const [debugStatus, setDebugStatus] = useState<string | null>(null);
   
   // Forms
-  const [catForm, setCatForm] = useState({ name: '', description: '', imageUrl: '', isVisible: true });
+  const [catForm, setCatForm] = useState({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' as 'public' | 'private' });
   const [contForm, setContForm] = useState({ 
     categoryId: '', 
     title: '', 
@@ -473,7 +648,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     type: ContentType.VIDEO, 
     url: '', 
     status: 'free' as 'free' | 'hidden',
-    links: [] as ContentLink[]
+    links: [] as ContentLink[],
+    accessLevel: 'public' as 'public' | 'private'
   });
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingContId, setEditingContId] = useState<string | null>(null);
@@ -520,7 +696,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     } else {
       await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
     }
-    setCatForm({ name: '', description: '', imageUrl: '', isVisible: true });
+    setCatForm({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' });
   };
 
   const handleSaveContent = async (e: React.FormEvent) => {
@@ -540,7 +716,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
       type: ContentType.VIDEO, 
       url: '', 
       status: 'free',
-      links: []
+      links: [],
+      accessLevel: 'public'
     });
   };
 
@@ -550,7 +727,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
       name: cat.name, 
       description: cat.description, 
       imageUrl: cat.imageUrl || '', 
-      isVisible: cat.isVisible !== false 
+      isVisible: cat.isVisible !== false,
+      accessLevel: cat.accessLevel || 'public'
     });
   };
 
@@ -563,7 +741,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
       type: cont.type, 
       url: cont.url, 
       status: cont.status || 'free',
-      links: cont.links || []
+      links: cont.links || [],
+      accessLevel: cont.accessLevel || 'public'
     });
   };
 
@@ -662,6 +841,18 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nível de Acesso</label>
+                  <select 
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    value={catForm.accessLevel}
+                    onChange={e => setCatForm({...catForm, accessLevel: e.target.value as 'public' | 'private'})}
+                    required
+                  >
+                    <option value="public">Público (Ver sem login)</option>
+                    <option value="private">Privado (Requer login)</option>
+                  </select>
+                </div>
+                <div>
                   <label className="flex items-center space-x-2 cursor-pointer">
                     <input 
                       type="checkbox" 
@@ -679,7 +870,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   {editingCatId && (
                     <button 
                       type="button" 
-                      onClick={() => { setEditingCatId(null); setCatForm({ name: '', description: '', imageUrl: '', isVisible: true }); }}
+                      onClick={() => { setEditingCatId(null); setCatForm({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' }); }}
                       className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors"
                     >
                       Cancelar
@@ -695,6 +886,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Nome</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Acesso</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Ações</th>
                   </tr>
@@ -705,6 +897,14 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                       <td className="px-6 py-4">
                         <div className="font-bold text-gray-900">{cat.name}</div>
                         <div className="text-xs text-gray-500 truncate max-w-xs">{cat.description}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-2 py-1 rounded text-[10px] font-bold uppercase",
+                          cat.accessLevel === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
+                        )}>
+                          {cat.accessLevel === 'private' ? 'Exclusivo' : 'Público'}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <button 
@@ -865,6 +1065,18 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   />
                 </div>
                 <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nível de Acesso</label>
+                  <select 
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    value={contForm.accessLevel}
+                    onChange={e => setContForm({...contForm, accessLevel: e.target.value as 'public' | 'private'})}
+                    required
+                  >
+                    <option value="public">Público (Todos veem)</option>
+                    <option value="private">Exclusivo (Só logados)</option>
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Status de Visibilidade</label>
                   <select 
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -883,7 +1095,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   {editingContId && (
                     <button 
                       type="button" 
-                      onClick={() => { setEditingContId(null); setContForm({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '', status: 'free', links: [] }); }}
+                      onClick={() => { setEditingContId(null); setContForm({ categoryId: '', title: '', description: '', type: ContentType.VIDEO, url: '', status: 'free', links: [], accessLevel: 'public' }); }}
                       className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-colors"
                     >
                       Cancelar
@@ -899,6 +1111,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Título</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Acesso</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Tipo</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
                     <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Ações</th>
@@ -910,6 +1123,14 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                       <td className="px-6 py-4">
                         <div className="font-bold text-gray-900">{cont.title}</div>
                         <div className="text-xs text-gray-500">{categories.find(c => c.id === cont.categoryId)?.name}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-2 py-1 rounded text-[10px] font-bold uppercase",
+                          cont.accessLevel === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
+                        )}>
+                          {cont.accessLevel === 'private' ? 'Exclusivo' : 'Público'}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <span className={cn(

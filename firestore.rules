@@ -16,7 +16,8 @@ service cloud.firestore {
       return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.description is string && data.description.size() < 500 &&
              (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() < 1000)) &&
-             (!('isVisible' in data) || data.isVisible is bool);
+             (!('isVisible' in data) || data.isVisible is bool) &&
+             (!('accessLevel' in data) || data.accessLevel in ['public', 'private']);
     }
 
     function isValidContent(data) {
@@ -25,7 +26,8 @@ service cloud.firestore {
              data.description is string && data.description.size() < 1000 &&
              data.type in ['video', 'pdf'] &&
              data.url is string && data.url.size() < 1000 &&
-             (!('status' in data) || data.status in ['free', 'hidden']);
+             (!('status' in data) || data.status in ['free', 'hidden']) &&
+             (!('accessLevel' in data) || data.accessLevel in ['public', 'private']);
     }
 
     function isValidFavorite(data) {
@@ -33,15 +35,19 @@ service cloud.firestore {
              data.contentId is string;
     }
 
-    // Categories: Publicly readable if visible, Admin writable
+    // Categories: Publicly readable if visible AND (accessLevel == 'public' OR isAuthenticated()), Admin writable
     match /categories/{categoryId} {
-      allow read: if resource.data.isVisible == true || isAdmin();
+      allow read: if (resource.data.isVisible == true && 
+                      (resource.data.accessLevel == 'public' || (resource.data.accessLevel == 'private' && isAuthenticated()))
+                     ) || isAdmin();
       allow create, update, delete: if isAdmin() && isValidCategory(request.resource.data);
     }
 
-    // Contents: Publicly readable if free, Admin writable
+    // Contents: Publicly readable if free AND (accessLevel == 'public' OR isAuthenticated()), Admin writable
     match /contents/{contentId} {
-      allow read: if resource.data.status == 'free' || isAdmin();
+      allow read: if (resource.data.status == 'free' && 
+                      (resource.data.accessLevel == 'public' || (resource.data.accessLevel == 'private' && isAuthenticated()))
+                     ) || isAdmin();
       allow create, update, delete: if isAdmin() && isValidContent(request.resource.data);
     }
 

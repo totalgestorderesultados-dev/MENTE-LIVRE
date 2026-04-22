@@ -24,6 +24,11 @@
         "isVisible": {
           "type": "boolean",
           "description": "Whether the category is visible to users"
+        },
+        "accessLevel": {
+          "type": "string",
+          "enum": ["public", "private"],
+          "description": "Public (anyone) or Private (logged in only)"
         }
       },
       "required": ["name", "description"]
@@ -75,6 +80,11 @@
           "type": "string",
           "enum": ["free", "hidden"],
           "description": "Visibility status of the content"
+        },
+        "accessLevel": {
+          "type": "string",
+          "enum": ["public", "private"],
+          "description": "Public (anyone) or Private (logged in only)"
         }
       },
       "required": ["categoryId", "title", "type", "url"]
