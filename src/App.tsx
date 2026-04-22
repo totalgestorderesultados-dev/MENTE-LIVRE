@@ -1181,7 +1181,7 @@ export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -1240,21 +1240,8 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    // Simulate loading
-    const timer = setTimeout(() => setLoading(false), 1000);
-    return () => clearTimeout(timer);
+    console.log("MindFlow App Mount");
   }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-500 font-medium animate-pulse">Carregando MindFlow...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <Router>
