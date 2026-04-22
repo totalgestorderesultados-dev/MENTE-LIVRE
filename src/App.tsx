@@ -1193,35 +1193,24 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Categories Listener - Single field queries to avoid composite index requirements
-    let qCats;
-    if (isAdmin) {
-      qCats = query(collection(db, 'categories'));
-    } else if (user) {
-      // Logged in: can read all visibility categories, UI will filter isVisible
-      qCats = query(collection(db, 'categories')); 
-    } else {
-      // Logged out: Only public categories
-      qCats = query(collection(db, 'categories'), where('accessLevel', '==', 'public'));
-    }
+    // Categories Listener - Broad query is now allowed by rules to ensure UI stability
+    // We sort and filter isVisible in memory to avoid composite index errors
+    const qCats = query(collection(db, 'categories'));
 
     const unsubCats = onSnapshot(qCats, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
-      // Sort in memory
       setCategories(data.sort((a, b) => (a.order || 0) - (b.order || 0)));
     }, (error) => {
       console.error("Error fetching categories:", error);
     });
 
-    // Contents Listener
+    // Contents Listener - Query must still match security rules
     let qConts;
-    if (isAdmin) {
-      qConts = query(collection(db, 'contents'));
-    } else if (user) {
-      // Logged in: can read all contents, UI will filter status
+    if (isAdmin || user) {
+      // Logged in: Can read all (security rules handle private content)
       qConts = query(collection(db, 'contents'));
     } else {
-      // Logged out: Only public contents
+      // Logged out: ONLY public contents allowed by security rules
       qConts = query(collection(db, 'contents'), where('accessLevel', '==', 'public'));
     }
 
@@ -1261,7 +1250,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center">
           <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-gray-500 font-medium animate-pulse">Carregando EduHub...</p>
+          <p className="text-gray-500 font-medium animate-pulse">Carregando MindFlow...</p>
         </div>
       </div>
     );
@@ -1288,9 +1277,9 @@ export default function App() {
               <div className="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center">
                 <BookOpen className="text-white w-3 h-3" />
               </div>
-              <span className="font-bold text-gray-900">EduHub</span>
+              <span className="font-bold text-gray-900">MindFlow</span>
             </div>
-            <p className="text-gray-500 text-sm">© 2024 EduHub - Plataforma de Educação. Todos os direitos reservados.</p>
+            <p className="text-gray-500 text-sm">© 2024 MindFlow - Plataforma de Clareza. Todos os direitos reservados.</p>
           </div>
         </footer>
       </div>
