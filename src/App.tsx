@@ -218,8 +218,8 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-10 text-center">
-        <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">O que você quer aprender hoje?</h1>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto">Explore nossas categorias e encontre o conteúdo ideal para o seu desenvolvimento.</p>
+        <h1 className="text-4xl font-extrabold text-gray-900 mb-4 tracking-tight">O seu aplicativo de clareza e direção emocional para vencer a ansiedade e a procrastinação.</h1>
+        <p className="text-lg text-gray-600 max-w-2xl mx-auto">Sua jornada para uma mente mais tranquila e produtiva começa aqui.</p>
         
         <div className="mt-8 max-w-xl mx-auto relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1184,41 +1184,54 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          console.log("Redirect login success:", result.user.email);
-        }
-      } catch (error: any) {
-        console.error("Redirect result error:", error);
-        // We don't want to show this error on every page load if it's just a "no result" error
-        if (error.code !== 'auth/no-auth-event') {
-          alert(`Erro no login alternativo: ${error.message}`);
-        }
-      }
-    };
-    checkRedirect();
-
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setIsAdmin(u?.email === 'edsonfinanceiro2017@gmail.com');
     });
 
-    const unsubCats = onSnapshot(query(collection(db, 'categories'), orderBy('order', 'asc')), (snap) => {
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    // Categories Listener - Query depends on auth state to match security rules
+    let qCats;
+    if (isAdmin) {
+      qCats = query(collection(db, 'categories'), orderBy('order', 'asc'));
+    } else if (user) {
+      qCats = query(collection(db, 'categories'), where('isVisible', '==', true), orderBy('order', 'asc'));
+    } else {
+      // Logged out: Only public visible categories
+      qCats = query(collection(db, 'categories'), where('isVisible', '==', true), where('accessLevel', '==', 'public'), orderBy('order', 'asc'));
+    }
+
+    const unsubCats = onSnapshot(qCats, (snap) => {
       setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Category)));
+    }, (error) => {
+      console.error("Error fetching categories:", error);
     });
 
-    const unsubConts = onSnapshot(query(collection(db, 'contents'), orderBy('createdAt', 'desc')), (snap) => {
+    // Contents Listener - Query depends on auth state to match security rules
+    let qConts;
+    if (isAdmin) {
+      qConts = query(collection(db, 'contents'), orderBy('createdAt', 'desc'));
+    } else if (user) {
+      qConts = query(collection(db, 'contents'), where('status', '==', 'free'), orderBy('createdAt', 'desc'));
+    } else {
+      // Logged out: Only public free contents
+      qConts = query(collection(db, 'contents'), where('status', '==', 'free'), where('accessLevel', '==', 'public'), orderBy('createdAt', 'desc'));
+    }
+
+    const unsubConts = onSnapshot(qConts, (snap) => {
       setContents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Content)));
+    }, (error) => {
+      console.error("Error fetching contents:", error);
     });
 
     return () => {
-      unsubAuth();
       unsubCats();
       unsubConts();
     };
-  }, []);
+  }, [isAdmin, user]);
 
   useEffect(() => {
     if (user) {
