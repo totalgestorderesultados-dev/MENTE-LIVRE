@@ -1193,36 +1193,42 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // Categories Listener - Query depends on auth state to match security rules
+    // Categories Listener - Single field queries to avoid composite index requirements
     let qCats;
     if (isAdmin) {
-      qCats = query(collection(db, 'categories'), orderBy('order', 'asc'));
+      qCats = query(collection(db, 'categories'));
     } else if (user) {
-      qCats = query(collection(db, 'categories'), where('isVisible', '==', true), orderBy('order', 'asc'));
+      // Logged in: can read all visibility categories, UI will filter isVisible
+      qCats = query(collection(db, 'categories')); 
     } else {
-      // Logged out: Only public visible categories
-      qCats = query(collection(db, 'categories'), where('isVisible', '==', true), where('accessLevel', '==', 'public'), orderBy('order', 'asc'));
+      // Logged out: Only public categories
+      qCats = query(collection(db, 'categories'), where('accessLevel', '==', 'public'));
     }
 
     const unsubCats = onSnapshot(qCats, (snap) => {
-      setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Category)));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
+      // Sort in memory
+      setCategories(data.sort((a, b) => (a.order || 0) - (b.order || 0)));
     }, (error) => {
       console.error("Error fetching categories:", error);
     });
 
-    // Contents Listener - Query depends on auth state to match security rules
+    // Contents Listener
     let qConts;
     if (isAdmin) {
-      qConts = query(collection(db, 'contents'), orderBy('createdAt', 'desc'));
+      qConts = query(collection(db, 'contents'));
     } else if (user) {
-      qConts = query(collection(db, 'contents'), where('status', '==', 'free'), orderBy('createdAt', 'desc'));
+      // Logged in: can read all contents, UI will filter status
+      qConts = query(collection(db, 'contents'));
     } else {
-      // Logged out: Only public free contents
-      qConts = query(collection(db, 'contents'), where('status', '==', 'free'), where('accessLevel', '==', 'public'), orderBy('createdAt', 'desc'));
+      // Logged out: Only public contents
+      qConts = query(collection(db, 'contents'), where('accessLevel', '==', 'public'));
     }
 
     const unsubConts = onSnapshot(qConts, (snap) => {
-      setContents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Content)));
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Content));
+      // Sort in memory by date descending
+      setContents(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     }, (error) => {
       console.error("Error fetching contents:", error);
     });

@@ -35,19 +35,15 @@ service cloud.firestore {
              data.contentId is string;
     }
 
-    // Categories: Publicly readable if visible AND (accessLevel == 'public' OR isAuthenticated()), Admin writable
+    // Categories: Publicly readable if (accessLevel == 'public' OR isAuthenticated()), Admin writable
     match /categories/{categoryId} {
-      allow read: if (resource.data.isVisible == true && 
-                      (resource.data.accessLevel == 'public' || (resource.data.accessLevel == 'private' && isAuthenticated()))
-                     ) || isAdmin();
+      allow read: if (resource.data.accessLevel == 'public' || (resource.data.accessLevel == 'private' && isAuthenticated())) || isAdmin();
       allow create, update, delete: if isAdmin() && isValidCategory(request.resource.data);
     }
 
-    // Contents: Publicly readable if free AND (accessLevel == 'public' OR isAuthenticated()), Admin writable
+    // Contents: Publicly readable if (accessLevel == 'public' OR isAuthenticated()), Admin writable
     match /contents/{contentId} {
-      allow read: if (resource.data.status == 'free' && 
-                      (resource.data.accessLevel == 'public' || (resource.data.accessLevel == 'private' && isAuthenticated()))
-                     ) || isAdmin();
+      allow read: if (resource.data.accessLevel == 'public' || (resource.data.accessLevel == 'private' && isAuthenticated())) || isAdmin();
       allow create, update, delete: if isAdmin() && isValidContent(request.resource.data);
     }
 
