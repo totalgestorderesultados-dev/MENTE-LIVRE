@@ -1275,6 +1275,99 @@ const Admin = ({ categories, contents, isAdmin, user }: { categories: Category[]
 // --- Main App ---
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [contents, setContents] = useState<Content[]>([]);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [dbError, setDbError] = useState<{ message: string, code: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchCategories = async () => {
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase.from('categories').select('*').order('order', { ascending: true });
+    if (error) {
+      console.error("Erro ao buscar categorias:", error);
+      setDbError({ message: error.message, code: error.code });
+    } else {
+      setCategories(data || []);
+      setDbError(null);
+    }
+  };
+
+  const fetchContents = async () => {
+    if (!isSupabaseConfigured) return;
+    let query = supabase.from('contents').select('*');
+    if (!(isAdmin || user)) {
+      query = query.eq('accessLevel', 'public');
+    }
+    const { data, error } = await query.order('createdAt', { ascending: false });
+    if (error) {
+      console.error("Erro ao buscar conteúdos:", error);
+      setDbError({ message: error.message, code: error.code });
+    } else {
+      setContents(data || []);
+      setDbError(null);
+    }
+  };
+
+  const fetchFavorites = async () => {
+    if (!user || !isSupabaseConfigured) return;
+    const { data, error } = await supabase.from('favorites').select('*').eq('userId', user.id);
+    if (error) {
+      console.error("Erro ao buscar favoritos:", error);
+    } else {
+      setFavorites(data || []);
+    }
+  };
+
+  useEffect(() => {
+    console.log("MindFlow App Mount");
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    const init = async () => {
+      setLoading(true);
+      await Promise.all([fetchCategories(), fetchContents()]);
+      setLoading(false);
+    };
+    init();
+
+    const channel = supabase.channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, fetchCategories)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contents' }, fetchContents)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'favorites' }, fetchFavorites)
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin, user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchFavorites();
+    } else {
+      setFavorites([]);
+    }
+  }, [user]);
+
   if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center">
@@ -1313,91 +1406,152 @@ export default function App() {
     );
   }
 
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [contents, setContents] = useState<Content[]>([]);
-  const [favorites, setFavorites] = useState<Favorite[]>([]);
-  const [loading, setLoading] = useState(false);
+  if (dbError && dbError.code !== '42P01') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-red-100">
+          <div className="bg-red-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 text-red-600">
+            <X className="w-8 h-8" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">Erro na Conexão</h1>
+          <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+            Houve um problema ao carregar os dados do banco.
+          </p>
+          <div className="bg-gray-50 rounded-xl p-4 text-left mb-6 font-mono text-[10px] text-gray-500 overflow-auto max-h-32">
+            <p className="font-bold text-gray-700 mb-1">Detalhes do erro:</p>
+            <p>Code: {dbError.code}</p>
+            <p>Message: {dbError.message}</p>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
-    });
+  if (dbError?.code === '42P01') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 italic">
+          <div className="bg-red-600 p-6 text-white flex items-center space-x-4">
+            <div className="bg-white/20 p-3 rounded-2xl">
+              <Plus className="w-8 h-8 text-white rotate-45" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Configuração do Banco de Dados</h1>
+              <p className="text-red-100 text-sm">As tabelas necessárias não foram encontradas no Supabase.</p>
+            </div>
+          </div>
+          
+          <div className="p-8">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Como resolver (Passo a Passo):</h2>
+            <ol className="space-y-4 text-sm text-gray-600">
+              <li className="flex items-start">
+                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">1</span>
+                <span>Acesse o seu dashboard no <a href="https://supabase.com/dashboard" target="_blank" className="text-indigo-600 font-bold underline">Supabase</a>.</span>
+              </li>
+              <li className="flex items-start">
+                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">2</span>
+                <span>Clique em <b>"SQL Editor"</b> no menu lateral esquerdo.</span>
+              </li>
+              <li className="flex items-start">
+                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">3</span>
+                <span>Clique em <b>"+ New query"</b>.</span>
+              </li>
+              <li className="flex items-start">
+                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">4</span>
+                <span>Copie o código abaixo e clique em <b>"Run"</b>:</span>
+              </li>
+            </ol>
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
-    });
+            <div className="mt-6 bg-gray-900 rounded-2xl p-4 relative group">
+              <pre className="text-indigo-400 text-[10px] sm:text-xs overflow-x-auto max-h-60 custom-scrollbar leading-relaxed">
+{`/* 1. Criar Tabela de Categorias */
+create table categories (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  description text,
+  "imageUrl" text,
+  "order" integer default 0,
+  "isVisible" boolean default true,
+  "accessLevel" text default 'public',
+  "createdAt" timestamp with time zone default now()
+);
 
-    return () => subscription.unsubscribe();
-  }, []);
+/* 2. Criar Tabela de Conteúdos */
+create table contents (
+  id uuid default gen_random_uuid() primary key,
+  "categoryId" uuid references categories(id) on delete cascade,
+  title text not null,
+  description text,
+  type text not null,
+  url text not null,
+  status text default 'free',
+  "accessLevel" text default 'public',
+  links jsonb default '[]'::jsonb,
+  "createdAt" timestamp with time zone default now()
+);
 
-  const fetchCategories = async () => {
-    const { data, error } = await supabase.from('categories').select('*').order('order', { ascending: true });
-    if (error) {
-      console.error("Erro ao buscar categorias:", error);
-      if (error.code === '42P01') {
-        console.warn("A tabela 'categories' não foi encontrada. Verifique o script SQL.");
-      }
-    } else {
-      setCategories(data || []);
-    }
-  };
+/* 3. Criar Tabela de Favoritos */
+create table favorites (
+  id uuid default gen_random_uuid() primary key,
+  "userId" uuid not null,
+  "contentId" uuid references contents(id) on delete cascade,
+  "createdAt" timestamp with time zone default now()
+);
 
-  const fetchContents = async () => {
-    let query = supabase.from('contents').select('*');
-    if (!(isAdmin || user)) {
-      query = query.eq('accessLevel', 'public');
-    }
-    const { data, error } = await query.order('createdAt', { ascending: false });
-    if (error) {
-      console.error("Erro ao buscar conteúdos:", error);
-      if (error.code === '42P01') {
-        console.warn("A tabela 'contents' não foi encontrada. Verifique o script SQL.");
-      }
-    } else {
-      setContents(data || []);
-    }
-  };
+/* 4. Habilitar Segurança (RLS) */
+alter table categories enable row level security;
+alter table contents enable row level security;
+alter table favorites enable row level security;
 
-  const fetchFavorites = async () => {
-    if (!user) return;
-    const { data, error } = await supabase.from('favorites').select('*').eq('userId', user.id);
-    if (error) {
-      console.error("Erro ao buscar favoritos:", error);
-    } else {
-      setFavorites(data || []);
-    }
-  };
+/* 5. Criar Políticas de Acesso */
+create policy "Público: Ver categorias" on categories for select using (true);
+create policy "Admin: Tudo em categorias" on categories using (auth.jwt() ->> 'email' = 'edsonfinanceiro2017@gmail.com');
 
-  useEffect(() => {
-    fetchCategories();
-    fetchContents();
+create policy "Público: Ver conteúdos livres" on contents for select using ("accessLevel" = 'public');
+create policy "Membros: Ver conteúdos exclusivos" on contents for select using (auth.role() = 'authenticated');
+create policy "Admin: Tudo em conteúdos" on contents using (auth.jwt() ->> 'email' = 'edsonfinanceiro2017@gmail.com');
 
-    const channel = supabase.channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, fetchCategories)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contents' }, fetchContents)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'favorites' }, fetchFavorites)
-      .subscribe();
+create policy "Usuários: Gerenciar próprios favoritos" on favorites using (auth.uid() = "userId");`}
+              </pre>
+              <button 
+                onClick={() => {
+                  const el = document.querySelector('pre');
+                  if (el) {
+                    navigator.clipboard.writeText(el.innerText);
+                    alert("Código copiado! Agora cole no SQL Editor do Supabase.");
+                  }
+                }}
+                className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
+              >
+                Copiar SQL
+              </button>
+            </div>
+            
+            <p className="mt-6 text-[10px] text-gray-400 text-center">
+              Após rodar o script e ver a mensagem "Success", atualize esta página.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [isAdmin, user]);
-
-  useEffect(() => {
-    if (user) {
-      fetchFavorites();
-    } else {
-      setFavorites([]);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    console.log("MindFlow App Mount");
-  }, []);
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="mt-4 text-gray-500 font-medium">Carregando MindFlow...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Router>
