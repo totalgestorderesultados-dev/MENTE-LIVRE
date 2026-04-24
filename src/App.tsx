@@ -1494,53 +1494,67 @@ export default function App() {
 
   const isUrlValidFormat = isSupabaseConfigured && !import.meta.env.VITE_SUPABASE_URL?.includes('db.');
 
-  if (!isSupabaseConfigured || !isUrlValidFormat) {
+  if (!isSupabaseConfigured) {
+    const hasUrl = !!import.meta.env.VITE_SUPABASE_URL;
+    const hasKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const isDbHost = import.meta.env.VITE_SUPABASE_URL?.includes('db.');
+    const isPlaceholder = import.meta.env.VITE_SUPABASE_ANON_KEY === 'your-supabase-anon-key';
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center">
-        <div className="max-w-md bg-white p-8 rounded-2xl shadow-xl">
-          <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Settings className="w-8 h-8 text-indigo-600 animate-spin" style={{ animationDuration: '3s' }} />
+        <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+          <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
+            <Settings className="w-10 h-10 text-indigo-500 animate-spin" style={{ animationDuration: '8s' }} />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Configuração Necessária</h1>
-          <p className="text-gray-600 mb-6 text-sm leading-relaxed">
-            {!isSupabaseConfigured 
-              ? "As variáveis de ambiente do Supabase ainda não foram configuradas."
-              : "A URL do Supabase parece incorreta (provavelmente você usou o host do banco em vez da URL da API)."}
+          <p className="text-gray-500 mb-8 text-sm leading-relaxed px-4">
+            As variáveis de ambiente do seu projeto Supabase ainda não foram detectadas corretamente.
           </p>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
-            <p className="text-xs text-amber-800 font-bold mb-3 uppercase tracking-wider flex items-center">
-              <Lock className="w-3 h-3 mr-1" /> Como configurar:
+
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left mb-8">
+            <p className="text-xs text-amber-800 font-bold mb-4 uppercase tracking-widest flex items-center">
+              <Lock className="w-3.5 h-3.5 mr-2" /> Guia de Configuração:
             </p>
-            <ul className="text-xs text-amber-900 space-y-3">
+            <ul className="text-xs text-amber-900 space-y-4">
               <li className="flex items-start">
-                <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">1</span>
-                <span>Abra o menu <b>Settings</b> no topo do painel lateral.</span>
-              </li>
-              <li className="flex items-start">
-                <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">2</span>
+                <span className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold",
+                  hasUrl ? "bg-green-100 text-green-700" : "bg-amber-200 text-amber-800"
+                )}>1</span>
                 <div>
-                  <p>Adicione <b>VITE_SUPABASE_URL</b>.</p>
-                  <p className="mt-1 font-bold text-amber-700">Formato correto: https://ID.supabase.co</p>
-                  <p className="mt-0.5 text-[10px] opacity-75">Nunca use o host 'db.ID.supabase.co' ou a string postgresql://.</p>
+                  <p className="font-bold">VITE_SUPABASE_URL</p>
+                  <p className="opacity-80 mt-1">Formato: <code className="bg-amber-100 px-1 rounded font-bold">https://xyz.supabase.co</code></p>
+                  {isDbHost && <p className="text-red-600 mt-1 font-bold">Erro: Você usou o host do banco (db.xyz...), use a URL da API.</p>}
+                  {!hasUrl && <p className="text-amber-700 mt-1 italic">Pendente no menu Settings</p>}
                 </div>
               </li>
               <li className="flex items-start">
-                <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">3</span>
-                <span>Adicione <b>VITE_SUPABASE_ANON_KEY</b> (chave <b>anon public</b>).</span>
+                <span className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold",
+                  (hasKey && !isPlaceholder) ? "bg-green-100 text-green-700" : "bg-amber-200 text-amber-800"
+                )}>2</span>
+                <div>
+                  <p className="font-bold">VITE_SUPABASE_ANON_KEY</p>
+                  <p className="opacity-80 mt-1">Use a chave <b>anon public</b>, nunca a service_role.</p>
+                  {(!hasKey || isPlaceholder) && <p className="text-amber-700 mt-1 italic">Pendente no menu Settings</p>}
+                </div>
               </li>
             </ul>
           </div>
-          {!isUrlValidFormat && (
-             <button 
-             onClick={() => window.location.reload()}
-             className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 mb-4"
-           >
-             Já corrigi, tentar de novo
-           </button>
-          )}
-          <p className="text-[10px] text-gray-400 italic font-mono">
-            ID do Projeto identificado: <span className="text-gray-600 font-bold">ylrvobyyxixwxiqptklk</span>
-          </p>
+
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 mb-6"
+          >
+            Já configurei, recarregar página
+          </button>
+          
+          <div className="pt-4 border-t border-gray-100">
+            <p className="text-[10px] text-gray-400 font-mono flex items-center justify-center space-x-2">
+              <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse"></span>
+              <span>Status: Aguardando Configuração em Settings</span>
+            </p>
+          </div>
         </div>
       </div>
     );

@@ -3,20 +3,30 @@ import { createBrowserClient } from '@supabase/ssr';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+console.log("Supabase Config Detection:", {
+  hasUrl: !!supabaseUrl,
+  urlStart: supabaseUrl?.substring(0, 10),
+  isDbHost: supabaseUrl?.includes('db.'),
+  hasKey: !!supabaseAnonKey,
+  keyLength: supabaseAnonKey?.length
+});
+
 const isValidUrl = (url: string | undefined): boolean => {
   if (!url) return false;
   try {
-    new URL(url);
-    return true;
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:';
   } catch {
     return false;
   }
 };
 
-const isConfigured = isValidUrl(supabaseUrl) && 
+const isConfigured = Boolean(
+  isValidUrl(supabaseUrl) && 
   supabaseAnonKey && 
   supabaseAnonKey !== 'your-supabase-anon-key' &&
-  !supabaseUrl?.includes('db.');
+  !supabaseUrl?.includes('db.')
+);
 
 // Lazy initialization proxy to avoid crashing at module load time
 export const supabase = new Proxy({} as any, {
