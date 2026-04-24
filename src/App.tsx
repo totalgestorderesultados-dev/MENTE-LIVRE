@@ -69,48 +69,43 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const handleLoginPopup = async () => {
-    setLoginError(null);
-    const email = window.prompt("Insira seu e-mail para receber um link de acesso:");
-    if (!email) return;
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
 
+  const handleSendMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailInput || !phoneInput) return;
+
+    setLoginError(null);
+    setIsSendingOtp(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
-        email,
+        email: emailInput,
         options: {
           emailRedirectTo: window.location.origin + window.location.pathname,
-        },
-      });
-      if (error) throw error;
-      alert("Link de acesso enviado! Verifique sua caixa de entrada.");
-    } catch (error: any) {
-      console.error("Login error:", error);
-      setLoginError(`Erro: ${error.message || "Falha ao enviar e-mail"}`);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setLoginError(null);
-    try {
-      const redirectUrl = window.location.origin + window.location.pathname;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          queryParams: {
-            prompt: 'select_account'
+          data: {
+            phone_number: phoneInput,
           }
         },
       });
       if (error) throw error;
+      setOtpSent(true);
     } catch (error: any) {
       console.error("Login error:", error);
-      let msg = error.message || "Falha ao entrar";
-      if (msg.includes("provider is not enabled")) {
-        msg = "Provedor Google não ativado no Supabase.";
-      }
-      setLoginError(`Erro: ${msg}`);
+      setLoginError(`Erro: ${error.message || "Falha ao enviar e-mail"}`);
+    } finally {
+      setIsSendingOtp(false);
     }
+  };
+
+  const handleLoginPopup = () => {
+    setShowEmailModal(true);
+    setOtpSent(false);
+    setEmailInput('');
+    setPhoneInput('');
   };
 
   const handleLoginRedirect = handleLoginPopup; // In Supabase signInWithOAuth handles both cases depending on environment
@@ -118,7 +113,102 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
   const handleLogout = () => supabase.auth.signOut();
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <>
+      {/* Email Login Modal */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-sm w-full relative border border-gray-100"
+          >
+            <button 
+              onClick={() => setShowEmailModal(false)}
+              className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {otpSent ? (
+              <div className="text-center py-4">
+                <div className="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                  <FileText className="w-10 h-10" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Verifique seu E-mail</h3>
+                <p className="text-gray-500 text-sm leading-relaxed mb-8">
+                  Enviamos um link de acesso especial para <b>{emailInput}</b>.<br />Abra sua caixa de entrada para entrar.
+                </p>
+                <button 
+                  onClick={() => setShowEmailModal(false)}
+                  className="w-full bg-gray-100 text-gray-700 py-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-95"
+                >
+                  Entendi
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+                  <LogIn className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Entrar no Painel</h3>
+                <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+                  Insira seus dados para receber o link de acesso exclusivo em seu e-mail.
+                </p>
+                
+                <form onSubmit={handleSendMagicLink} className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="relative">
+                      <input 
+                        type="email"
+                        required
+                        autoFocus
+                        placeholder="Seu e-mail pessoal"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 px-5 py-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 font-medium"
+                      />
+                    </div>
+                    <div className="relative">
+                      <input 
+                        type="tel"
+                        required
+                        placeholder="Seu celular/WhatsApp"
+                        value={phoneInput}
+                        onChange={(e) => setPhoneInput(e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 px-5 py-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 font-medium"
+                      />
+                    </div>
+                  </div>
+                  
+                  {loginError && (
+                    <div className="flex items-center space-x-2 text-xs text-red-600 bg-red-50 p-4 rounded-2xl border border-red-100">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>{loginError}</span>
+                    </div>
+                  )}
+
+                  <button 
+                    type="submit"
+                    disabled={isSendingOtp}
+                    className={cn(
+                      "w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-100 flex items-center justify-center",
+                      isSendingOtp ? "opacity-70 cursor-not-allowed" : "hover:bg-indigo-700 active:scale-95"
+                    )}
+                  >
+                    {isSendingOtp ? (
+                      <span className="flex items-center">
+                        <Settings className="w-5 h-5 mr-2 animate-spin" /> Enviando...
+                      </span>
+                    ) : "Enviar Link de Acesso"}
+                  </button>
+                </form>
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <PwaInstaller />
       {loginError && (
         <div className="bg-red-600 text-white text-center py-2 text-sm font-medium px-4 flex items-center justify-center">
@@ -162,18 +252,10 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
                 <button 
                   onClick={handleLoginPopup} 
                   className="flex items-center space-x-2 bg-indigo-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
-                  title="Entrar com E-mail"
+                  title="Entrar"
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>E-mail</span>
-                </button>
-                <button 
-                  onClick={handleGoogleLogin} 
-                  className="flex items-center space-x-2 bg-white text-gray-700 border border-gray-200 px-3 py-2 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
-                  title="Entrar com Google"
-                >
-                  <img src="https://www.google.com/favicon.ico" className="w-3.5 h-3.5" alt="Google" />
-                  <span>Google</span>
+                  <span>Entrar</span>
                 </button>
               </div>
             )}
@@ -209,22 +291,15 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
                 onClick={handleLoginPopup} 
                 className="w-full bg-indigo-600 text-white px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg active:scale-95 transition-all"
               >
-                <FileText className="w-5 h-5 mr-3" />
-                Receber Link de Acesso por E-mail
-              </button>
-              
-              <button 
-                onClick={handleGoogleLogin} 
-                className="w-full bg-white text-gray-700 border border-gray-200 px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-sm active:scale-95 transition-all"
-              >
-                <img src="https://www.google.com/favicon.ico" className="w-5 h-5 mr-3" alt="Google" />
-                Tentar com Google
+                <LogIn className="w-5 h-5 mr-3" />
+                Entrar com E-mail e Celular
               </button>
             </div>
           )}
         </div>
       )}
     </nav>
+    </>
   );
 };
 
