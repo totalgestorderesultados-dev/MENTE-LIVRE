@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, User, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc, getDocs, limit } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { supabase } from './supabaseClient';
+import type { User } from '@supabase/supabase-js';
 import { Category, Content, ContentLink, ContentType, Favorite } from './types';
 import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download } from 'lucide-react';
 import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
@@ -72,35 +71,23 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 
   const handleLoginPopup = async () => {
     setLoginError(null);
-    const provider = new GoogleAuthProvider();
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithPopup(auth, provider);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
     } catch (error: any) {
-      console.error("Login popup error:", error);
-      if (error.code === 'auth/popup-blocked') {
-        setLoginError("O popup foi bloqueado. Tente o botão 'Alternativo' ao lado.");
-      } else if (error.code === 'auth/unauthorized-domain') {
-        setLoginError("Erro: Este domínio não está autorizado no Firebase. Por favor, me avise para eu corrigir.");
-      } else {
-        setLoginError(`Erro: ${error.message || "Falha ao entrar"}`);
-      }
+      console.error("Login error:", error);
+      setLoginError(`Erro: ${error.message || "Falha ao entrar"}`);
     }
   };
 
-  const handleLoginRedirect = async () => {
-    setLoginError(null);
-    const provider = new GoogleAuthProvider();
-    try {
-      await setPersistence(auth, browserLocalPersistence);
-      await signInWithRedirect(auth, provider);
-    } catch (error: any) {
-      console.error("Login redirect error:", error);
-      setLoginError(`Erro Redirecionamento: ${error.message}`);
-    }
-  };
+  const handleLoginRedirect = handleLoginPopup; // In Supabase signInWithOAuth handles both cases depending on environment
 
-  const handleLogout = () => signOut(auth);
+  const handleLogout = () => supabase.auth.signOut();
 
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -134,8 +121,8 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
                   </Link>
                 )}
                 <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-                  <img src={user.photoURL || ''} alt="" className="w-6 h-6 rounded-full border border-gray-200" />
-                  <span className="text-xs font-bold text-gray-700">{user.displayName?.split(' ')[0]}</span>
+                  <img src={user.user_metadata?.avatar_url || ''} alt="" className="w-6 h-6 rounded-full border border-gray-200" />
+                  <span className="text-xs font-bold text-gray-700">{(user.user_metadata?.full_name || user.email)?.split(' ')[0]}</span>
                 </div>
                 <button onClick={handleLogout} className="text-gray-400 hover:text-red-600 p-2 rounded-full transition-colors" title="Sair">
                   <LogOut className="w-5 h-5" />
@@ -176,8 +163,8 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
           {user ? (
             <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full shadow-sm" />
-                <span className="font-bold text-gray-700">{user.displayName}</span>
+                <img src={user.user_metadata?.avatar_url || ''} alt="" className="w-8 h-8 rounded-full shadow-sm" />
+                <span className="font-bold text-gray-700">{user.user_metadata?.full_name || user.email}</span>
               </div>
               <button onClick={handleLogout} className="text-red-500 font-bold bg-red-50 px-4 py-2 rounded-xl text-sm">Sair</button>
             </div>
@@ -413,14 +400,16 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
   const toggleFavorite = async (contentId: string) => {
     if (!user) return alert("Faça login para favoritar conteúdos");
     
-    const existing = favorites.find(f => f.contentId === contentId && f.userId === user.uid);
+    const existing = favorites.find(f => f.contentId === contentId && f.userId === user.id);
     if (existing) {
-      await deleteDoc(doc(db, 'favorites', existing.id));
+      const { error } = await supabase.from('favorites').delete().eq('id', existing.id);
+      if (error) console.error("Error deleting favorite:", error);
     } else {
-      await addDoc(collection(db, 'favorites'), {
-        userId: user.uid,
+      const { error } = await supabase.from('favorites').insert({
+        userId: user.id,
         contentId: contentId
       });
+      if (error) console.error("Error adding favorite:", error);
     }
   };
 
@@ -682,7 +671,7 @@ const ContentDetail = ({ contents }: { contents: Content[] }) => {
   );
 };
 
-const Admin = ({ categories, contents, isAdmin }: { categories: Category[], contents: Content[], isAdmin: boolean }) => {
+const Admin = ({ categories, contents, isAdmin, user }: { categories: Category[], contents: Content[], isAdmin: boolean, user: User | null }) => {
   const [activeTab, setActiveTab] = useState<'categories' | 'contents'>('categories');
   const [debugStatus, setDebugStatus] = useState<string | null>(null);
   
@@ -704,8 +693,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   const testConnection = async () => {
     setDebugStatus("Testando...");
     try {
-      const q = query(collection(db, 'categories'), limit(1));
-      await getDocs(q);
+      const { data, error } = await supabase.from('categories').select('*').limit(1);
+      if (error) throw error;
       setDebugStatus("Conexão com Banco de Dados: OK!");
     } catch (error: any) {
       console.error("Debug connection error:", error);
@@ -719,10 +708,10 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
         <Settings className="w-12 h-12 text-gray-300 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h2>
         <p className="text-gray-500 mb-2">Você precisa estar logado como administrador para acessar esta página.</p>
-        {auth.currentUser ? (
+        {user ? (
           <div className="mb-6 p-3 bg-amber-50 rounded-xl border border-amber-100">
             <p className="text-xs text-amber-700">Logado como:</p>
-            <p className="text-sm font-bold text-amber-900">{auth.currentUser.email}</p>
+            <p className="text-sm font-bold text-amber-900">{user.email}</p>
             <p className="text-[10px] text-amber-600 mt-1">Este e-mail não tem permissão de administrador.</p>
           </div>
         ) : (
@@ -742,10 +731,12 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     setSaving(true);
     try {
       if (editingCatId) {
-        await updateDoc(doc(db, 'categories', editingCatId), catForm);
+        const { error } = await supabase.from('categories').update(catForm).eq('id', editingCatId);
+        if (error) throw error;
         setEditingCatId(null);
       } else {
-        await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
+        const { error } = await supabase.from('categories').insert({ ...catForm, order: categories.length });
+        if (error) throw error;
       }
       setCatForm({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' });
     } catch (error) {
@@ -763,10 +754,12 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     setSaving(true);
     try {
       if (editingContId) {
-        await updateDoc(doc(db, 'contents', editingContId), contForm);
+        const { error } = await supabase.from('contents').update(contForm).eq('id', editingContId);
+        if (error) throw error;
         setEditingContId(null);
       } else {
-        await addDoc(collection(db, 'contents'), { ...contForm, createdAt: new Date().toISOString() });
+        const { error } = await supabase.from('contents').insert({ ...contForm, createdAt: new Date().toISOString() });
+        if (error) throw error;
       }
       setContForm({ 
         categoryId: '', 
@@ -812,16 +805,32 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   };
 
   const toggleCategoryVisibility = async (id: string, current: boolean) => {
-    await updateDoc(doc(db, 'categories', id), { isVisible: !current });
+    try {
+      const { error } = await supabase.from('categories').update({ isVisible: !current }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error toggling category visibility:", error);
+    }
   };
 
   const toggleContentStatus = async (id: string, current: 'free' | 'hidden') => {
-    await updateDoc(doc(db, 'contents', id), { status: current === 'free' ? 'hidden' : 'free' });
+    try {
+      const { error } = await supabase.from('contents').update({ status: current === 'free' ? 'hidden' : 'free' }).eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error toggling content status:", error);
+    }
   };
 
   const handleDelete = async (coll: string, id: string) => {
-    if (confirm('Tem certeza que deseja excluir?')) {
-      await deleteDoc(doc(db, coll, id));
+    if (window.confirm('Tem certeza que deseja excluir?')) {
+      try {
+        const { error } = await supabase.from(coll).delete().eq('id', id);
+        if (error) throw error;
+      } catch (error) {
+        console.error("Error deleting:", error);
+        alert("Erro ao excluir. Tente novamente.");
+      }
     }
   };
 
@@ -838,9 +847,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
         { name: 'Cursos Técnicos', description: 'Aprenda novas profissões e habilidades práticas.', order: 4, isVisible: true, accessLevel: 'public' }
       ];
 
-      for (const cat of initialCategories) {
-        await addDoc(collection(db, 'categories'), cat);
-      }
+      const { error } = await supabase.from('categories').insert(initialCategories);
+      if (error) throw error;
       alert('Categorias iniciais adicionadas!');
     } catch (error) {
       console.error("Error seeding data:", error);
@@ -1275,60 +1283,60 @@ export default function App() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setIsAdmin(u?.email === 'edsonfinanceiro2017@gmail.com');
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
     });
 
-    return () => unsubAuth();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    // Categories Listener - Broad query is now allowed by rules to ensure UI stability
-    // We sort and filter isVisible in memory to avoid composite index errors
-    const qCats = query(collection(db, 'categories'));
+  const fetchCategories = async () => {
+    const { data, error } = await supabase.from('categories').select('*').order('order', { ascending: true });
+    if (error) console.error("Error fetching categories:", error);
+    else setCategories(data || []);
+  };
 
-    const unsubCats = onSnapshot(qCats, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
-      setCategories(data.sort((a, b) => (a.order || 0) - (b.order || 0)));
-    }, (error) => {
-      console.error("Error fetching categories:", error);
-    });
-
-    // Contents Listener - Query must still match security rules
-    let qConts;
-    if (isAdmin || user) {
-      // Logged in: Can read all (security rules handle private content)
-      qConts = query(collection(db, 'contents'));
-    } else {
-      // Logged out: ONLY public contents allowed by security rules
-      qConts = query(collection(db, 'contents'), where('accessLevel', '==', 'public'));
+  const fetchContents = async () => {
+    let query = supabase.from('contents').select('*');
+    if (!(isAdmin || user)) {
+      query = query.eq('accessLevel', 'public');
     }
+    const { data, error } = await query.order('createdAt', { ascending: false });
+    if (error) console.error("Error fetching contents:", error);
+    else setContents(data || []);
+  };
 
-    const unsubConts = onSnapshot(qConts, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Content));
-      // Sort in memory by date descending, with safety checks
-      setContents(data.sort((a, b) => {
-        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return dateB - dateA;
-      }));
-    }, (error) => {
-      console.error("Error fetching contents:", error);
-    });
+  const fetchFavorites = async () => {
+    if (!user) return;
+    const { data, error } = await supabase.from('favorites').select('*').eq('userId', user.id);
+    if (error) console.error("Error fetching favorites:", error);
+    else setFavorites(data || []);
+  };
+
+  useEffect(() => {
+    fetchCategories();
+    fetchContents();
+
+    const channel = supabase.channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, fetchCategories)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contents' }, fetchContents)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'favorites' }, fetchFavorites)
+      .subscribe();
 
     return () => {
-      unsubCats();
-      unsubConts();
+      supabase.removeChannel(channel);
     };
   }, [isAdmin, user]);
 
   useEffect(() => {
     if (user) {
-      const unsubFavs = onSnapshot(query(collection(db, 'favorites'), where('userId', '==', user.uid)), (snap) => {
-        setFavorites(snap.docs.map(d => ({ id: d.id, ...d.data() } as Favorite)));
-      });
-      return () => unsubFavs();
+      fetchFavorites();
     } else {
       setFavorites([]);
     }
@@ -1348,7 +1356,7 @@ export default function App() {
             <Route path="/" element={<Home categories={categories} user={user} isAdmin={isAdmin} />} />
             <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} isAdmin={isAdmin} />} />
             <Route path="/content/:id" element={<ContentDetail contents={contents} />} />
-            <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} />} />
+            <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} user={user} />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
