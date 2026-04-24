@@ -1,21 +1,13 @@
 import { createBrowserClient } from '@supabase/ssr';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-console.log("Supabase Config Detection:", {
-  hasUrl: !!supabaseUrl,
-  urlStart: supabaseUrl?.substring(0, 10),
-  isDbHost: supabaseUrl?.includes('db.'),
-  hasKey: !!supabaseAnonKey,
-  keyLength: supabaseAnonKey?.length
-});
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
 const isValidUrl = (url: string | undefined): boolean => {
   if (!url) return false;
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:';
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
   } catch {
     return false;
   }

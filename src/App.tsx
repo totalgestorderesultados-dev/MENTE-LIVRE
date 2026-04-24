@@ -1570,10 +1570,11 @@ export default function App() {
   const isUrlValidFormat = isSupabaseConfigured && !import.meta.env.VITE_SUPABASE_URL?.includes('db.');
 
   if (!isSupabaseConfigured) {
-    const hasUrl = !!import.meta.env.VITE_SUPABASE_URL;
-    const hasKey = !!import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const isDbHost = import.meta.env.VITE_SUPABASE_URL?.includes('db.');
-    const isPlaceholder = import.meta.env.VITE_SUPABASE_ANON_KEY === 'your-supabase-anon-key';
+    const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+    const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const hasUrl = !!rawUrl && rawUrl !== 'your-supabase-url';
+    const hasKey = !!rawKey && rawKey !== 'your-supabase-anon-key';
+    const isDbHost = rawUrl?.includes('db.');
 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center">
@@ -1581,37 +1582,43 @@ export default function App() {
           <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
             <Settings className="w-10 h-10 text-indigo-500 animate-spin" style={{ animationDuration: '8s' }} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Configuração Necessária</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Configuração Pendente</h1>
           <p className="text-gray-500 mb-8 text-sm leading-relaxed px-4">
-            As variáveis de ambiente do seu projeto Supabase ainda não foram detectadas corretamente.
+            A aplicação não detectou as chaves do Supabase. Se você já configurou no menu <b>Settings</b>, tente recarregar a página ou re-compartilhar o app.
           </p>
 
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left mb-8">
             <p className="text-xs text-amber-800 font-bold mb-4 uppercase tracking-widest flex items-center">
-              <Lock className="w-3.5 h-3.5 mr-2" /> Guia de Configuração:
+              <Lock className="w-3.5 h-3.5 mr-2" /> Verificação de Variáveis:
             </p>
             <ul className="text-xs text-amber-900 space-y-4">
               <li className="flex items-start">
                 <span className={cn(
                   "w-5 h-5 rounded-full flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold",
                   hasUrl ? "bg-green-100 text-green-700" : "bg-amber-200 text-amber-800"
-                )}>1</span>
+                )}>{hasUrl ? "✓" : "1"}</span>
                 <div>
                   <p className="font-bold">VITE_SUPABASE_URL</p>
-                  <p className="opacity-80 mt-1">Formato: <code className="bg-amber-100 px-1 rounded font-bold">https://xyz.supabase.co</code></p>
+                  {hasUrl ? (
+                    <p className="text-green-700 mt-0.5">Detectado: <code className="bg-green-50 px-1 rounded">{rawUrl?.substring(0, 15)}...</code></p>
+                  ) : (
+                    <p className="text-amber-700 mt-1 italic">Vazio ou padrão no menu Settings</p>
+                  )}
                   {isDbHost && <p className="text-red-600 mt-1 font-bold">Erro: Você usou o host do banco (db.xyz...), use a URL da API.</p>}
-                  {!hasUrl && <p className="text-amber-700 mt-1 italic">Pendente no menu Settings</p>}
                 </div>
               </li>
               <li className="flex items-start">
                 <span className={cn(
                   "w-5 h-5 rounded-full flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold",
-                  (hasKey && !isPlaceholder) ? "bg-green-100 text-green-700" : "bg-amber-200 text-amber-800"
-                )}>2</span>
+                  hasKey ? "bg-green-100 text-green-700" : "bg-amber-200 text-amber-800"
+                )}>{hasKey ? "✓" : "2"}</span>
                 <div>
                   <p className="font-bold">VITE_SUPABASE_ANON_KEY</p>
-                  <p className="opacity-80 mt-1">Use a chave <b>anon public</b>, nunca a service_role.</p>
-                  {(!hasKey || isPlaceholder) && <p className="text-amber-700 mt-1 italic">Pendente no menu Settings</p>}
+                  {hasKey ? (
+                    <p className="text-green-700 mt-0.5">Detectado: <code className="bg-green-50 px-1 rounded">{rawKey?.substring(0, 10)}...</code></p>
+                  ) : (
+                    <p className="text-amber-700 mt-1 italic">Vazio ou padrão no menu Settings</p>
+                  )}
                 </div>
               </li>
             </ul>
@@ -1619,17 +1626,14 @@ export default function App() {
 
           <button 
             onClick={() => window.location.reload()}
-            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 mb-6"
+            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg active:scale-95 mb-4"
           >
-            Já configurei, recarregar página
+            Recarregar Página
           </button>
           
-          <div className="pt-4 border-t border-gray-100">
-            <p className="text-[10px] text-gray-400 font-mono flex items-center justify-center space-x-2">
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse"></span>
-              <span>Status: Aguardando Configuração em Settings</span>
-            </p>
-          </div>
+          <p className="text-[10px] text-gray-400 font-medium">
+            Dica: Se a página publicada não atualizar, clique no botão <b>Share</b> novamente.
+          </p>
         </div>
       </div>
     );
