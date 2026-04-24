@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import type { User } from '@supabase/supabase-js';
 import { Category, Content, ContentLink, ContentType, Favorite } from './types';
 import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download, AlertTriangle, Check, Activity, CheckCircle2, ArrowRight } from 'lucide-react';
+import { motion } from 'motion/react';
 import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
 
 // --- Components ---
@@ -63,163 +63,16 @@ const PwaInstaller = () => {
       </div>
     </div>
   );
-};
-
-const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
+};const Navbar = ({ isAdmin, onAdminAuth, onLogout }: { isAdmin: boolean, onAdminAuth: () => void, onLogout: () => void }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-
-  const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailInput, setEmailInput] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-
-  const handleSendMagicLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!emailInput || !phoneInput) return;
-
-    setLoginError(null);
-    setIsSendingOtp(true);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: emailInput,
-        options: {
-          emailRedirectTo: window.location.origin + window.location.pathname,
-          data: {
-            phone_number: phoneInput,
-          }
-        },
-      });
-      if (error) throw error;
-      setOtpSent(true);
-    } catch (error: any) {
-      console.error("Login error:", error);
-      setLoginError(`Erro: ${error.message || "Falha ao enviar e-mail"}`);
-    } finally {
-      setIsSendingOtp(false);
-    }
-  };
-
-  const handleLoginPopup = () => {
-    setShowEmailModal(true);
-    setOtpSent(false);
-    setEmailInput('');
-    setPhoneInput('');
-  };
-
-  const handleLoginRedirect = handleLoginPopup; // In Supabase signInWithOAuth handles both cases depending on environment
-
-  const handleLogout = () => supabase.auth.signOut();
-
+  
   return (
-    <>
-      {/* Email Login Modal */}
-      {showEmailModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-sm w-full relative border border-gray-100"
-          >
-            <button 
-              onClick={() => setShowEmailModal(false)}
-              className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            {otpSent ? (
-              <div className="text-center py-4">
-                <div className="w-20 h-20 bg-green-50 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
-                  <FileText className="w-10 h-10" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Verifique seu E-mail</h3>
-                <p className="text-gray-500 text-sm leading-relaxed mb-8">
-                  Enviamos um link de acesso especial para <b>{emailInput}</b>.<br />Abra sua caixa de entrada para entrar.
-                </p>
-                <button 
-                  onClick={() => setShowEmailModal(false)}
-                  className="w-full bg-gray-100 text-gray-700 py-4 rounded-2xl font-bold hover:bg-gray-200 transition-all active:scale-95"
-                >
-                  Entendi
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
-                  <LogIn className="w-8 h-8" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Entrar no Painel</h3>
-                <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-                  Insira seus dados para receber o link de acesso exclusivo em seu e-mail.
-                </p>
-                
-                <form onSubmit={handleSendMagicLink} className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <input 
-                        type="email"
-                        required
-                        autoFocus
-                        placeholder="Seu e-mail pessoal"
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 px-5 py-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 font-medium"
-                      />
-                    </div>
-                    <div className="relative">
-                      <input 
-                        type="tel"
-                        required
-                        placeholder="Seu celular/WhatsApp"
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                        className="w-full bg-gray-50 border border-gray-200 px-5 py-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 font-medium"
-                      />
-                    </div>
-                  </div>
-                  
-                  {loginError && (
-                    <div className="flex items-center space-x-2 text-xs text-red-600 bg-red-50 p-4 rounded-2xl border border-red-100">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>{loginError}</span>
-                    </div>
-                  )}
-
-                  <button 
-                    type="submit"
-                    disabled={isSendingOtp}
-                    className={cn(
-                      "w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-100 flex items-center justify-center",
-                      isSendingOtp ? "opacity-70 cursor-not-allowed" : "hover:bg-indigo-700 active:scale-95"
-                    )}
-                  >
-                    {isSendingOtp ? (
-                      <span className="flex items-center">
-                        <Settings className="w-5 h-5 mr-2 animate-spin" /> Enviando...
-                      </span>
-                    ) : "Enviar Link de Acesso"}
-                  </button>
-                </form>
-              </>
-            )}
-          </motion.div>
-        </div>
-      )}
-
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <PwaInstaller />
-      {loginError && (
-        <div className="bg-red-600 text-white text-center py-2 text-sm font-medium px-4 flex items-center justify-center">
-          <span>{loginError}</span>
-          <button onClick={() => setLoginError(null)} className="ml-4 bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-xs">Fechar</button>
-        </div>
-      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-2">
+            <Link to="/" className="flex items-center space-x-2" onClick={() => setIsMenuOpen(false)}>
               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <BookOpen className="text-white w-5 h-5" />
               </div>
@@ -231,31 +84,32 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
           <div className="hidden md:flex items-center space-x-2">
             <Link to="/" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Início</Link>
             
-            {user ? (
+            {isAdmin ? (
               <div className="flex items-center space-x-4">
-                {isAdmin && (
-                  <Link to="/admin" className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors" title="Painel Admin">
-                    <Settings className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Painel Admin</span>
-                  </Link>
-                )}
+                <Link to="/admin" className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors" title="Painel Admin">
+                  <Settings className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-wider">Painel Admin</span>
+                </Link>
                 <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-                  <img src={user.user_metadata?.avatar_url || ''} alt="" className="w-6 h-6 rounded-full border border-gray-200" />
-                  <span className="text-xs font-bold text-gray-700">{(user.user_metadata?.full_name || user.email)?.split(' ')[0]}</span>
+                  <div className="w-7 h-7 bg-indigo-600 rounded-full flex items-center justify-center text-white text-[10px] shadow-sm">ADM</div>
                 </div>
-                <button onClick={handleLogout} className="text-gray-400 hover:text-red-600 p-2 rounded-full transition-colors" title="Sair">
+                <button 
+                  onClick={onLogout}
+                  className="text-gray-400 hover:text-red-500 p-2 rounded-full transition-colors"
+                  title="Sair"
+                >
                   <LogOut className="w-5 h-5" />
                 </button>
               </div>
             ) : (
               <div className="flex items-center space-x-2">
                 <button 
-                  onClick={handleLoginPopup} 
+                  onClick={onAdminAuth} 
                   className="flex items-center space-x-2 bg-indigo-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
-                  title="Entrar"
+                  title="Acesso Administrador"
                 >
-                  <LogIn className="w-3.5 h-3.5" />
-                  <span>Entrar</span>
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Admin</span>
                 </button>
               </div>
             )}
@@ -277,35 +131,45 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
           {isAdmin && (
             <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-600 hover:text-indigo-600 py-2 font-medium">Painel Admin</Link>
           )}
-          {user ? (
+          {isAdmin ? (
             <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <img src={user.user_metadata?.avatar_url || ''} alt="" className="w-8 h-8 rounded-full shadow-sm" />
-                <span className="font-bold text-gray-700">{user.user_metadata?.full_name || user.email}</span>
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-sm">ADM</div>
+                <span className="text-sm font-bold text-gray-900">Administrador</span>
               </div>
-              <button onClick={handleLogout} className="text-red-500 font-bold bg-red-50 px-4 py-2 rounded-xl text-sm">Sair</button>
+              <button 
+                onClick={() => {
+                  onLogout();
+                  setIsMenuOpen(false);
+                }} 
+                className="text-red-500 font-bold bg-red-50 px-4 py-2 rounded-xl text-sm"
+              >
+                Sair
+              </button>
             </div>
           ) : (
             <div className="pt-4 border-t border-gray-100 space-y-3">
               <button 
-                onClick={handleLoginPopup} 
+                onClick={() => {
+                  onAdminAuth();
+                  setIsMenuOpen(false);
+                }} 
                 className="w-full bg-indigo-600 text-white px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg active:scale-95 transition-all"
               >
-                <LogIn className="w-5 h-5 mr-3" />
-                Entrar com E-mail e Celular
+                <Lock className="w-5 h-5 mr-3" />
+                Painel Administrativo
               </button>
             </div>
           )}
         </div>
       )}
     </nav>
-    </>
   );
 };
 
 // --- Pages ---
 
-const Home = ({ categories, user, isAdmin }: { categories: Category[], user: User | null, isAdmin: boolean }) => {
+const Home = ({ categories, isAdmin }: { categories: Category[], isAdmin: boolean }) => {
   const [search, setSearch] = useState('');
   
   const filteredCategories = categories.filter(c => {
@@ -375,7 +239,7 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
           <div className="inline-flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
             {[
               { id: 'public', label: 'Gratuito' },
-              { id: 'private', label: activeSegment === 'private' && !user ? 'Realizar Cadastro' : 'Exclusivo' }
+              { id: 'private', label: 'Exclusivo' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -387,41 +251,34 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
                     : "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
                 )}
               >
-                {tab.id === 'private' && activeSegment === 'private' && !user ? (
-                   <div className="flex items-center">
-                     <LogIn className="w-4 h-4 mr-2" />
-                     {tab.label}
-                   </div>
-                ) : tab.label}
+                {tab.label}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {activeSegment === 'private' && !user ? (
+      {activeSegment === 'private' && !isAdmin ? (
         <div className="bg-white rounded-3xl p-12 border border-gray-100 shadow-xl text-center max-w-2xl mx-auto py-16">
           <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
             <Lock className="text-indigo-600 w-10 h-10" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Área Exclusiva</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Área Restrita</h2>
           <p className="text-gray-600 mb-8 leading-relaxed">
-            Cadastre-se ou entre com sua conta Google agora para acessar cursos premium, 
-            materiais exclusivos e salvar seus conteúdos favoritos.
+            Esta categoria contém materiais exclusivos. O acesso é restrito ao administrador do sistema.
           </p>
           <div className="flex flex-col space-y-4 items-center">
             <button 
               onClick={() => {
                 const nav = document.querySelector('nav');
-                const loginBtn = nav?.querySelector('button[onClick*="handleLoginPopup"]');
-                if (loginBtn instanceof HTMLButtonElement) loginBtn.click();
-                else alert("Clique no botão 'Entrar' no topo da página.");
+                const adminBtn = nav?.querySelector('button[title="Acesso Administrador"]');
+                if (adminBtn instanceof HTMLButtonElement) adminBtn.click();
+                else alert("Clique no botão 'Admin' no topo da página.");
               }}
               className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-105"
             >
-              <LogIn className="w-5 h-5 mr-2" /> Começar Agora Gratuitamente
+              <Lock className="w-5 h-5 mr-2" /> Acesso Administrador
             </button>
-            <p className="text-xs text-gray-400">Acesso instantâneo via conta Google.</p>
           </div>
         </div>
       ) : (
@@ -429,11 +286,11 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
           {displayedCategories.map((category) => (
             <Link 
               key={category.id} 
-              to={(category.accessLevel || 'public') === 'private' && !user ? '#' : `/category/${category.id}`}
+              to={(category.accessLevel || 'public') === 'private' && !isAdmin ? '#' : `/category/${category.id}`}
               onClick={(e) => {
-                if ((category.accessLevel || 'public') === 'private' && !user) {
+                if ((category.accessLevel || 'public') === 'private' && !isAdmin) {
                   e.preventDefault();
-                  alert("Esta categoria é exclusiva para membros. Por favor, faça login para acessar.");
+                  alert("Esta categoria é exclusiva para o administrador.");
                 }
               }}
               className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
@@ -511,7 +368,7 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
   );
 };
 
-const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { categories: Category[], contents: Content[], favorites: Favorite[], user: User | null, isAdmin: boolean }) => {
+const CategoryDetail = ({ categories, contents, favorites, isAdmin }: { categories: Category[], contents: Content[], favorites: Favorite[], isAdmin: boolean }) => {
   const { id } = useParams();
   const category = categories.find(c => c.id === id);
   const categoryContents = contents.filter(c => c.categoryId === id);
@@ -526,22 +383,10 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
     return matchesSearch && isVisible;
   });
 
-  const isFavorite = (contentId: string) => favorites.some(f => f.contentId === contentId);
+  const isFavorite = (contentId: string) => false;
 
   const toggleFavorite = async (contentId: string) => {
-    if (!user) return alert("Faça login para favoritar conteúdos");
-    
-    const existing = favorites.find(f => f.contentId === contentId && f.userId === user.id);
-    if (existing) {
-      const { error } = await supabase.from('favorites').delete().eq('id', existing.id);
-      if (error) console.error("Error deleting favorite:", error);
-    } else {
-      const { error } = await supabase.from('favorites').insert({
-        userId: user.id,
-        contentId: contentId
-      });
-      if (error) console.error("Error adding favorite:", error);
-    }
+    alert("Função de favoritos desativada temporariamente.");
   };
 
   if (!category) return <div className="p-10 text-center">Categoria não encontrada</div>;
@@ -586,9 +431,9 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
                 {((content.accessLevel || 'public') === 'private') && (
                   <span className={cn(
                     "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase",
-                    user ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
+                    isAdmin ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
                   )}>
-                    {user ? 'Acesso Liberado' : 'Premium'}
+                    {isAdmin ? 'Acesso Admin' : 'Exclusivo'}
                   </span>
                 )}
               </div>
@@ -605,22 +450,22 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
                 <Star className={cn("w-5 h-5", isFavorite(content.id) && "fill-current")} />
               </button>
               <Link 
-                to={(content.accessLevel || 'public') === 'private' && !user ? '#' : `/content/${content.id}`}
+                to={(content.accessLevel || 'public') === 'private' && !isAdmin ? '#' : `/content/${content.id}`}
                 onClick={(e) => {
-                  if ((content.accessLevel || 'public') === 'private' && !user) {
+                  if ((content.accessLevel || 'public') === 'private' && !isAdmin) {
                     e.preventDefault();
-                    alert("Acesso exclusivo para membros. Por favor, faça login.");
+                    alert("Este conteúdo é exclusivo para o administrador.");
                   }
                 }}
                 className={cn(
                   "px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center",
-                  content.accessLevel === 'private' && !user 
+                  content.accessLevel === 'private' && !isAdmin 
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
                     : "bg-gray-900 text-white hover:bg-indigo-600"
                 )}
               >
-                {content.accessLevel === 'private' && !user ? <Lock className="w-4 h-4 mr-2" /> : null}
-                {content.accessLevel === 'private' && !user ? 'Bloqueado' : 'Abrir conteúdo'}
+                {content.accessLevel === 'private' && !isAdmin ? <Lock className="w-4 h-4 mr-2" /> : null}
+                {content.accessLevel === 'private' && !isAdmin ? 'Bloqueado' : 'Abrir conteúdo'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Link>
             </div>
@@ -802,7 +647,7 @@ const ContentDetail = ({ contents }: { contents: Content[] }) => {
   );
 };
 
-const Admin = ({ categories, contents, isAdmin, user }: { categories: Category[], contents: Content[], isAdmin: boolean, user: User | null }) => {
+const Admin = ({ categories, contents, isAdmin }: { categories: Category[], contents: Content[], isAdmin: boolean }) => {
   const [activeTab, setActiveTab] = useState<'categories' | 'contents'>('categories');
   const [debugStatus, setDebugStatus] = useState<string | null>(null);
   
@@ -839,15 +684,7 @@ const Admin = ({ categories, contents, isAdmin, user }: { categories: Category[]
         <Settings className="w-12 h-12 text-gray-300 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h2>
         <p className="text-gray-500 mb-2">Você precisa estar logado como administrador para acessar esta página.</p>
-        {user ? (
-          <div className="mb-6 p-3 bg-amber-50 rounded-xl border border-amber-100">
-            <p className="text-xs text-amber-700">Logado como:</p>
-            <p className="text-sm font-bold text-amber-900">{user.email}</p>
-            <p className="text-[10px] text-amber-600 mt-1">Este e-mail não tem permissão de administrador.</p>
-          </div>
-        ) : (
-          <p className="text-sm text-red-500 mb-6 font-medium">Você não está logado.</p>
-        )}
+        <p className="text-sm text-red-500 mb-6 font-medium">Esta área é restrita para o administrador do MindFlow.</p>
         <Link to="/" className="text-indigo-600 font-bold hover:underline">Voltar para o Início</Link>
       </div>
     );
@@ -1406,13 +1243,40 @@ const Admin = ({ categories, contents, isAdmin, user }: { categories: Category[]
 // --- Main App ---
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return sessionStorage.getItem('admin_auth') === 'true';
+  });
   const [categories, setCategories] = useState<Category[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [dbError, setDbError] = useState<{ message: string, code: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const handleAdminVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (adminPassword === '847109') {
+      setIsAdmin(true);
+      sessionStorage.setItem('admin_auth', 'true');
+      setShowAdminLogin(false);
+      setAdminPassword('');
+      setLoginError(null);
+    } else {
+      setLoginError('Senha incorreta!');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('admin_auth');
+  };
+
+  const handleLoginPopup = () => {
+    setShowAdminLogin(true);
+    setLoginError(null);
+  };
 
   const fetchCategories = async () => {
     if (!isSupabaseConfigured) return null;
@@ -1433,7 +1297,7 @@ export default function App() {
     if (!isSupabaseConfigured) return null;
     try {
       let query = supabase.from('contents').select('*');
-      if (!(isAdmin || user)) {
+      if (!isAdmin) {
         query = query.eq('accessLevel', 'public');
       }
       const { data, error } = await query.order('createdAt', { ascending: false });
@@ -1449,11 +1313,10 @@ export default function App() {
   };
 
   const fetchFavorites = async () => {
-    if (!user || !isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) return;
     try {
-      const { data, error } = await supabase.from('favorites').select('*').eq('userId', user.id);
-      if (error) console.error("Erro ao buscar favoritos:", error);
-      else setFavorites(data || []);
+      // Favorites are disabled since we don't have user accounts anymore
+      setFavorites([]);
     } catch (err) {
       console.error("Fetch favorites unexpected error:", err);
     }
@@ -1472,23 +1335,7 @@ export default function App() {
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-    addLog("Iniciando verificação de sessão...");
-    
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      addLog(session ? `Sessão encontrada: ${session.user.email}` : "Nenhuma sessão ativa.");
-      setUser(session?.user ?? null);
-      setIsAdmin(session?.user?.email?.toLowerCase() === 'edsonfinanceiro2017@gmail.com');
-    }).catch(err => {
-      addLog(`Erro na sessão: ${err.message}`);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      addLog(`Mudança de estado auth: ${_event}`);
-      setUser(session?.user ?? null);
-      setIsAdmin(session?.user?.email?.toLowerCase() === 'edsonfinanceiro2017@gmail.com');
-    });
-
-    return () => subscription.unsubscribe();
+    addLog("Sistema simplificado: Acesso via senha 847109.");
   }, []);
 
   useEffect(() => {
@@ -1545,15 +1392,11 @@ export default function App() {
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [isAdmin, user]);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (user && isSupabaseConfigured) {
-      fetchFavorites();
-    } else {
-      setFavorites([]);
-    }
-  }, [user]);
+    fetchFavorites();
+  }, []);
 
   useEffect(() => {
     let timer: any;
@@ -1893,14 +1736,68 @@ create policy "Usuários: Gerenciar próprios favoritos" on favorites using (aut
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 font-sans text-gray-900 selection:bg-indigo-100 selection:text-indigo-900">
-        <Navbar user={user} isAdmin={isAdmin} />
+        <Navbar isAdmin={isAdmin} onAdminAuth={handleLoginPopup} onLogout={handleLogout} />
+
+        {/* Admin Login Modal */}
+        {showAdminLogin && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-sm w-full relative border border-gray-100"
+            >
+              <button 
+                onClick={() => setShowAdminLogin(false)}
+                className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+                <Lock className="w-8 h-8" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Acesso Admin</h3>
+              <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+                Insira a senha de administrador para acessar o painel de gestão.
+              </p>
+              
+              <form onSubmit={handleAdminVerify} className="space-y-4">
+                <div className="relative">
+                  <input 
+                    type="password"
+                    required
+                    autoFocus
+                    placeholder="Senha de acesso"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 px-5 py-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 font-medium text-center tracking-[0.5em]"
+                  />
+                </div>
+                
+                {loginError && (
+                  <div className="flex items-center space-x-2 text-xs text-red-600 bg-red-50 p-3 rounded-xl border border-red-100">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{loginError}</span>
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-100"
+                >
+                  Entrar no Painel
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
         
         <main className="pb-20">
           <Routes>
-            <Route path="/" element={<Home categories={categories} user={user} isAdmin={isAdmin} />} />
-            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} isAdmin={isAdmin} />} />
+            <Route path="/" element={<Home categories={categories} isAdmin={isAdmin} />} />
+            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} isAdmin={isAdmin} />} />
             <Route path="/content/:id" element={<ContentDetail contents={contents} />} />
-            <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} user={user} />} />
+            <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
