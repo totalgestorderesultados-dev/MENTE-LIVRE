@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -13,7 +13,10 @@ const isValidUrl = (url: string | undefined): boolean => {
   }
 };
 
-const isConfigured = isValidUrl(supabaseUrl) && supabaseAnonKey && supabaseAnonKey !== 'your-supabase-anon-key';
+const isConfigured = isValidUrl(supabaseUrl) && 
+  supabaseAnonKey && 
+  supabaseAnonKey !== 'your-supabase-anon-key' &&
+  !supabaseUrl?.includes('db.');
 
 // Lazy initialization proxy to avoid crashing at module load time
 export const supabase = new Proxy({} as any, {
@@ -28,7 +31,7 @@ export const supabase = new Proxy({} as any, {
     
     // Initialize real client on first access
     if (!target._realClient) {
-      target._realClient = createClient(supabaseUrl!, supabaseAnonKey!);
+      target._realClient = createBrowserClient(supabaseUrl!, supabaseAnonKey!);
     }
     
     return target._realClient[prop];

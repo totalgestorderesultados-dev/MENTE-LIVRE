@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, N
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import type { User } from '@supabase/supabase-js';
 import { Category, Content, ContentLink, ContentType, Favorite } from './types';
-import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download } from 'lucide-react';
+import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download, AlertTriangle } from 'lucide-react';
 import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
 
 // --- Components ---
@@ -1284,40 +1284,47 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const fetchCategories = async () => {
-    if (!isSupabaseConfigured) return;
-    const { data, error } = await supabase.from('categories').select('*').order('order', { ascending: true });
-    if (error) {
-      console.error("Erro ao buscar categorias:", error);
-      setDbError({ message: error.message, code: error.code });
-    } else {
+    if (!isSupabaseConfigured) return null;
+    try {
+      const { data, error } = await supabase.from('categories').select('*').order('order', { ascending: true });
+      if (error) {
+        console.error("Erro ao buscar categorias:", error);
+        return error;
+      }
       setCategories(data || []);
-      setDbError(null);
+      return null;
+    } catch (err: any) {
+      return err;
     }
   };
 
   const fetchContents = async () => {
-    if (!isSupabaseConfigured) return;
-    let query = supabase.from('contents').select('*');
-    if (!(isAdmin || user)) {
-      query = query.eq('accessLevel', 'public');
-    }
-    const { data, error } = await query.order('createdAt', { ascending: false });
-    if (error) {
-      console.error("Erro ao buscar conteúdos:", error);
-      setDbError({ message: error.message, code: error.code });
-    } else {
+    if (!isSupabaseConfigured) return null;
+    try {
+      let query = supabase.from('contents').select('*');
+      if (!(isAdmin || user)) {
+        query = query.eq('accessLevel', 'public');
+      }
+      const { data, error } = await query.order('createdAt', { ascending: false });
+      if (error) {
+        console.error("Erro ao buscar conteúdos:", error);
+        return error;
+      }
       setContents(data || []);
-      setDbError(null);
+      return null;
+    } catch (err: any) {
+      return err;
     }
   };
 
   const fetchFavorites = async () => {
     if (!user || !isSupabaseConfigured) return;
-    const { data, error } = await supabase.from('favorites').select('*').eq('userId', user.id);
-    if (error) {
-      console.error("Erro ao buscar favoritos:", error);
-    } else {
-      setFavorites(data || []);
+    try {
+      const { data, error } = await supabase.from('favorites').select('*').eq('userId', user.id);
+      if (error) console.error("Erro ao buscar favoritos:", error);
+      else setFavorites(data || []);
+    } catch (err) {
+      console.error("Fetch favorites unexpected error:", err);
     }
   };
 
@@ -1325,14 +1332,27 @@ export default function App() {
     console.log("MindFlow App Mount");
   }, []);
 
+  const [showTroubleshoot, setShowTroubleshoot] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  const addLog = (msg: string) => {
+    setDebugLogs(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${msg}`]);
+  };
+
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+    addLog("Iniciando verificação de sessão...");
+    
     supabase.auth.getSession().then(({ data: { session } }) => {
+      addLog(session ? `Sessão encontrada: ${session.user.email}` : "Nenhuma sessão ativa.");
       setUser(session?.user ?? null);
       setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
+    }).catch(err => {
+      addLog(`Erro na sessão: ${err.message}`);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      addLog(`Mudança de estado auth: ${_event}`);
       setUser(session?.user ?? null);
       setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
     });
@@ -1342,15 +1362,39 @@ export default function App() {
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
+    let isMounted = true;
+
     const init = async () => {
       try {
         setLoading(true);
-        await Promise.all([fetchCategories(), fetchContents()]);
+        addLog("Buscando categorias e conteúdos...");
+        
+        // Use a timeout for the entire init process
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("A conexão com Supabase expirou (Timeout)")), 15000)
+        );
+
+        const fetchPromise = Promise.all([fetchCategories(), fetchContents()]);
+        
+        const [catError, contError] = await Promise.race([fetchPromise, timeoutPromise]) as [any, any];
+        
+        if (!isMounted) return;
+
+        const firstError = catError || contError;
+        if (firstError) {
+          addLog(`Erro detectado: ${firstError.message}`);
+          setDbError({ message: firstError.message, code: firstError.code });
+        } else {
+          addLog("Dados carregados com sucesso.");
+          setDbError(null);
+        }
       } catch (err: any) {
-        console.error("Init error:", err);
-        setDbError({ message: err.message, code: err.code || 'INIT_ERROR' });
+        if (isMounted) {
+          addLog(`Erro fatal: ${err.message}`);
+          setDbError({ message: err.message, code: err.code || 'INIT_ERROR' });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
     init();
@@ -1359,22 +1403,42 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, fetchCategories)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contents' }, fetchContents)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'favorites' }, fetchFavorites)
-      .subscribe();
+      .subscribe((status) => {
+        addLog(`Canal Realtime: ${status}`);
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+          console.warn("Realtime channel issue:", status);
+        }
+      });
 
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
   }, [isAdmin, user]);
 
   useEffect(() => {
-    if (user) {
+    if (user && isSupabaseConfigured) {
       fetchFavorites();
     } else {
       setFavorites([]);
     }
   }, [user]);
 
-  if (!isSupabaseConfigured) {
+  useEffect(() => {
+    let timer: any;
+    if (loading && isSupabaseConfigured) {
+      timer = setTimeout(() => {
+        setShowTroubleshoot(true);
+      }, 3000); // Trigger troubleshooting after 3s
+    } else {
+      setShowTroubleshoot(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading, isSupabaseConfigured]);
+
+  const isUrlValidFormat = isSupabaseConfigured && !import.meta.env.VITE_SUPABASE_URL?.includes('db.');
+
+  if (!isSupabaseConfigured || !isUrlValidFormat) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center">
         <div className="max-w-md bg-white p-8 rounded-2xl shadow-xl">
@@ -1383,7 +1447,9 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Configuração Necessária</h1>
           <p className="text-gray-600 mb-6 text-sm leading-relaxed">
-            Parece que as variáveis de ambiente do Supabase ainda não foram configuradas.
+            {!isSupabaseConfigured 
+              ? "As variáveis de ambiente do Supabase ainda não foram configuradas."
+              : "A URL do Supabase parece incorreta (provavelmente você usou o host do banco em vez da URL da API)."}
           </p>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
             <p className="text-xs text-amber-800 font-bold mb-3 uppercase tracking-wider flex items-center">
@@ -1396,16 +1462,28 @@ export default function App() {
               </li>
               <li className="flex items-start">
                 <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">2</span>
-                <span>Adicione <b>VITE_SUPABASE_URL</b> (ex: https://xyz.supabase.co).</span>
+                <div>
+                  <p>Adicione <b>VITE_SUPABASE_URL</b>.</p>
+                  <p className="mt-1 font-bold text-amber-700">Formato correto: https://ID.supabase.co</p>
+                  <p className="mt-0.5 text-[10px] opacity-75">Nunca use o host 'db.ID.supabase.co' ou a string postgresql://.</p>
+                </div>
               </li>
               <li className="flex items-start">
                 <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">3</span>
-                <span>Adicione <b>VITE_SUPABASE_ANON_KEY</b> (use a chave <b>anon (public)</b>, nunca a service_role).</span>
+                <span>Adicione <b>VITE_SUPABASE_ANON_KEY</b> (chave <b>anon public</b>).</span>
               </li>
             </ul>
           </div>
-          <p className="text-[10px] text-gray-400 italic">
-            O aplicativo carregará automaticamente após você fornecer as credenciais.
+          {!isUrlValidFormat && (
+             <button 
+             onClick={() => window.location.reload()}
+             className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 mb-4"
+           >
+             Já corrigi, tentar de novo
+           </button>
+          )}
+          <p className="text-[10px] text-gray-400 italic font-mono">
+            ID do Projeto identificado: <span className="text-gray-600 font-bold">ylrvobyyxixwxiqptklk</span>
           </p>
         </div>
       </div>
@@ -1414,28 +1492,40 @@ export default function App() {
 
   if (dbError && dbError.code !== '42P01') {
     const isSecretKeyError = dbError.message?.includes('secret API key');
+    const isTimeoutError = dbError.message?.includes('Timeout');
+    const isResetForced = dbError.code === 'RESET_CONFIG';
     
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-red-100">
-          <div className="bg-red-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 text-red-600">
-            <X className="w-8 h-8" />
+          <div className={cn(
+            "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6",
+            (isResetForced || isTimeoutError) ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
+          )}>
+            {isResetForced ? <Settings className="w-8 h-8" /> : isTimeoutError ? <AlertTriangle className="w-8 h-8" /> : <X className="w-8 h-8" />}
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Erro na Conexão</h1>
+          <h1 className="text-xl font-bold text-gray-900 mb-2">
+            {isResetForced ? "Revisar Configuração" : isTimeoutError ? "Tempo de Conexão Esgotado" : "Erro na Conexão"}
+          </h1>
           <p className="text-gray-600 text-sm mb-6 leading-relaxed">
-            {isSecretKeyError 
-              ? "Você usou uma Chave de API Secreta (service_role) em vez da Chave Anon (pública)."
-              : "Houve um problema ao carregar os dados do banco."}
+            {isResetForced 
+              ? "Você escolheu revisar as configurações do Supabase."
+              : isTimeoutError
+                ? "Não conseguimos conectar ao seu servidor Supabase após 15 segundos."
+                : isSecretKeyError 
+                  ? "Você usou uma Chave de API Secreta (service_role) em vez da Chave Anon (pública)."
+                  : "Houve um problema ao carregar os dados do banco."}
           </p>
 
-          {isSecretKeyError ? (
+          {(isSecretKeyError || isResetForced || isTimeoutError) ? (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
-              <p className="text-xs text-amber-800 font-bold mb-2">Como Corrigir:</p>
-              <ol className="text-xs text-amber-900 space-y-2">
-                <li>1. Vá no menu <b>Settings</b>.</li>
-                <li>2. No campo <b>VITE_SUPABASE_ANON_KEY</b>, apague a chave atual.</li>
-                <li>3. Cole a chave chamada <b>anon / public</b> do seu dashboard Supabase.</li>
-              </ol>
+              <p className="text-xs text-amber-800 font-bold mb-2">Checklist de Solução:</p>
+              <ul className="text-xs text-amber-900 space-y-2 list-disc list-inside">
+                <li>Verifique se o projeto não está <b>Pausado</b> no Supabase.</li>
+                <li>Confirme que a URL é: <code className="bg-amber-100 px-1 rounded">https://ID.supabase.co</code></li>
+                <li>Nunca use o host de banco <code className="bg-amber-100 px-1 rounded">db.ID...</code> ou a string <code className="bg-amber-100 px-1 rounded">postgresql://</code>.</li>
+                <li>Use a chave <b>anon public</b>, nunca a <b>service_role</b>.</li>
+              </ul>
             </div>
           ) : (
             <div className="bg-gray-50 rounded-xl p-4 text-left mb-6 font-mono text-[10px] text-gray-500 overflow-auto max-h-32">
@@ -1449,7 +1539,7 @@ export default function App() {
             onClick={() => window.location.reload()}
             className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
-            {isSecretKeyError ? "Já corrigi, recarregar" : "Tentar Novamente"}
+            {isResetForced || isSecretKeyError ? "Recarregar após configurar" : "Tentar Novamente"}
           </button>
         </div>
       </div>
@@ -1567,10 +1657,44 @@ create policy "Usuários: Gerenciar próprios favoritos" on favorites using (aut
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex flex-col items-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <div className="flex flex-col items-center max-w-sm w-full text-center">
           <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-gray-500 font-medium">Carregando MindFlow...</p>
+          <p className="mt-4 text-gray-500 font-medium whitespace-nowrap">Carregando MindFlow...</p>
+          
+          {showTroubleshoot && (
+            <div className="mt-10 p-6 bg-white rounded-3xl shadow-xl border border-gray-100 animate-in fade-in slide-in-from-bottom duration-700">
+              <p className="text-sm text-gray-600 mb-4 font-medium">O carregamento está demorando mais do que o esperado.</p>
+              
+              {debugLogs.length > 0 && (
+                <div className="mb-6 bg-gray-50 rounded-xl p-3 text-left font-mono text-[9px] text-gray-400 border border-gray-100">
+                  <p className="font-bold text-gray-500 mb-1 uppercase tracking-wider">Status do Sistema:</p>
+                  {debugLogs.map((log, i) => (
+                    <div key={i} className="border-b border-gray-100 py-1 last:border-0">{log}</div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-col space-y-3">
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+                >
+                  Recarregar Página
+                </button>
+                <button 
+                  onClick={() => {
+                    // Forcefully clear keys info to show config screen
+                    setDbError({ message: "Reset forçado pelo usuário.", code: "RESET_CONFIG" });
+                    setLoading(false);
+                  }}
+                  className="bg-amber-100 text-amber-700 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-amber-200 transition-all"
+                >
+                  Revisar Configurações
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
