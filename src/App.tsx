@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, N
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import type { User } from '@supabase/supabase-js';
 import { Category, Content, ContentLink, ContentType, Favorite } from './types';
-import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download, AlertTriangle } from 'lucide-react';
+import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download, AlertTriangle, Check, Activity, CheckCircle2, ArrowRight } from 'lucide-react';
 import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
 
 // --- Components ---
@@ -1572,68 +1572,109 @@ export default function App() {
   if (!isSupabaseConfigured) {
     const rawUrl = import.meta.env.VITE_SUPABASE_URL;
     const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const hasUrl = !!rawUrl && rawUrl !== 'your-supabase-url';
-    const hasKey = !!rawKey && rawKey !== 'your-supabase-anon-key';
+    const hasUrl = !!rawUrl && rawUrl !== 'your-supabase-url' && rawUrl.length > 5;
+    const hasKey = !!rawKey && rawKey !== 'your-supabase-anon-key' && rawKey.length > 10;
     const isDbHost = rawUrl?.includes('db.');
+    
+    // Check if the URL has a protocol
+    const needsProtocol = hasUrl && !rawUrl.includes('://');
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center">
-        <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
-          <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-inner">
-            <Settings className="w-10 h-10 text-indigo-500 animate-spin" style={{ animationDuration: '8s' }} />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center font-sans">
+        <div className="max-w-md w-full bg-white p-8 rounded-[2.5rem] shadow-2xl border border-gray-100/50 backdrop-blur-xl">
+          <div className="w-24 h-24 bg-gradient-to-tr from-indigo-50 to-blue-50 rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-inner ring-4 ring-white">
+            <Settings className="w-12 h-12 text-indigo-500 animate-spin" style={{ animationDuration: '10s' }} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Configuração Pendente</h1>
-          <p className="text-gray-500 mb-8 text-sm leading-relaxed px-4">
-            A aplicação não detectou as chaves do Supabase. Se você já configurou no menu <b>Settings</b>, tente recarregar a página ou re-compartilhar o app.
-          </p>
-
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-left mb-8">
-            <p className="text-xs text-amber-800 font-bold mb-4 uppercase tracking-widest flex items-center">
-              <Lock className="w-3.5 h-3.5 mr-2" /> Verificação de Variáveis:
-            </p>
-            <ul className="text-xs text-amber-900 space-y-4">
-              <li className="flex items-start">
-                <span className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold",
-                  hasUrl ? "bg-green-100 text-green-700" : "bg-amber-200 text-amber-800"
-                )}>{hasUrl ? "✓" : "1"}</span>
-                <div>
-                  <p className="font-bold">VITE_SUPABASE_URL</p>
-                  {hasUrl ? (
-                    <p className="text-green-700 mt-0.5">Detectado: <code className="bg-green-50 px-1 rounded">{rawUrl?.substring(0, 15)}...</code></p>
-                  ) : (
-                    <p className="text-amber-700 mt-1 italic">Vazio ou padrão no menu Settings</p>
-                  )}
-                  {isDbHost && <p className="text-red-600 mt-1 font-bold">Erro: Você usou o host do banco (db.xyz...), use a URL da API.</p>}
-                </div>
-              </li>
-              <li className="flex items-start">
-                <span className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold",
-                  hasKey ? "bg-green-100 text-green-700" : "bg-amber-200 text-amber-800"
-                )}>{hasKey ? "✓" : "2"}</span>
-                <div>
-                  <p className="font-bold">VITE_SUPABASE_ANON_KEY</p>
-                  {hasKey ? (
-                    <p className="text-green-700 mt-0.5">Detectado: <code className="bg-green-50 px-1 rounded">{rawKey?.substring(0, 10)}...</code></p>
-                  ) : (
-                    <p className="text-amber-700 mt-1 italic">Vazio ou padrão no menu Settings</p>
-                  )}
-                </div>
-              </li>
-            </ul>
-          </div>
-
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg active:scale-95 mb-4"
-          >
-            Recarregar Página
-          </button>
           
-          <p className="text-[10px] text-gray-400 font-medium">
-            Dica: Se a página publicada não atualizar, clique no botão <b>Share</b> novamente.
+          <h1 className="text-3xl font-black text-gray-900 mb-3 tracking-tight">Quase lá!</h1>
+          <p className="text-gray-500 mb-8 text-sm leading-relaxed px-2 font-medium">
+            Sua conexão com o banco de dados Supabase precisa ser configurada no painel principal.
           </p>
+
+          <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 text-left mb-8 space-y-4">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-2 flex items-center">
+              <Activity className="w-3.5 h-3.5 mr-2 text-indigo-400" /> Diagnóstico de Conexão
+            </p>
+            
+            <div className="space-y-4">
+              <div className="flex items-start">
+                <div className={cn(
+                  "w-6 h-6 rounded-xl flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold shadow-sm transition-all",
+                  hasUrl ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                )}>
+                  {hasUrl ? <Check className="w-3.5 h-3.5" /> : "1"}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-gray-800">VITE_SUPABASE_URL</p>
+                  {hasUrl ? (
+                    <div className="mt-1 space-y-1">
+                      <p className="text-emerald-600 text-xs font-semibold flex items-center">
+                        <CheckCircle2 className="w-3 h-3 mr-1" /> Valor detectado
+                      </p>
+                      {isDbHost && (
+                        <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 mt-2">
+                          <p className="text-[10px] font-bold uppercase mb-1">Erro de Formato</p>
+                          <p className="text-[11px] leading-tight font-medium">Você usou o host do banco de dados (<code className="bg-red-100 px-1 rounded">db.xyz...</code>). Use o <b>Project URL</b> da API.</p>
+                        </div>
+                      )}
+                      {needsProtocol && (
+                        <div className="bg-amber-50 text-amber-700 p-3 rounded-xl border border-amber-100 mt-2">
+                          <p className="text-[10px] font-bold uppercase mb-1">Aviso</p>
+                          <p className="text-[11px] leading-tight font-medium">Faltou o <code className="bg-amber-100 px-1 rounded">https://</code>, mas tentaremos conectar assim mesmo.</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-xs mt-1 italic font-medium">Configuração pendente no menu Settings</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <div className={cn(
+                  "w-6 h-6 rounded-xl flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold shadow-sm transition-all",
+                  hasKey ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
+                )}>
+                  {hasKey ? <Check className="w-3.5 h-3.5" /> : "2"}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-gray-800">VITE_SUPABASE_ANON_KEY</p>
+                  {hasKey ? (
+                    <p className="text-emerald-600 text-xs font-semibold mt-1 flex items-center text-ellipsis overflow-hidden">
+                      <CheckCircle2 className="w-3 h-3 mr-1 shrink-0" /> Chave pública detectada
+                    </p>
+                  ) : (
+                    <p className="text-slate-400 text-xs mt-1 italic font-medium">Configuração pendente no menu Settings</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95 flex items-center justify-center group"
+            >
+              <span>Recarregar e Testar</span>
+              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+            </button>
+            
+            <a 
+              href="https://supabase.com/dashboard" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="block w-full bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-xs hover:bg-slate-200 transition-all active:scale-95"
+            >
+              Abrir Console Supabase
+            </a>
+          </div>
+          
+          <div className="mt-8 pt-6 border-t border-gray-50">
+            <p className="text-[10px] text-gray-300 font-medium leading-relaxed max-w-[200px] mx-auto italic">
+              Dica: Após salvar no menu Settings, a página pode levar alguns segundos para aplicar as mudanças.
+            </p>
+          </div>
         </div>
       </div>
     );
