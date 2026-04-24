@@ -733,39 +733,57 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     );
   }
 
+  const [saving, setSaving] = useState(false);
+
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!catForm.name) return;
+    if (!catForm.name || saving) return;
     
-    if (editingCatId) {
-      await updateDoc(doc(db, 'categories', editingCatId), catForm);
-      setEditingCatId(null);
-    } else {
-      await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
+    setSaving(true);
+    try {
+      if (editingCatId) {
+        await updateDoc(doc(db, 'categories', editingCatId), catForm);
+        setEditingCatId(null);
+      } else {
+        await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
+      }
+      setCatForm({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' });
+    } catch (error) {
+      console.error("Error saving category:", error);
+      alert("Erro ao salvar categoria. Tente novamente.");
+    } finally {
+      setSaving(false);
     }
-    setCatForm({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' });
   };
 
   const handleSaveContent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contForm.categoryId || !contForm.title || !contForm.url) return;
+    if (!contForm.categoryId || !contForm.title || !contForm.url || saving) return;
     
-    if (editingContId) {
-      await updateDoc(doc(db, 'contents', editingContId), contForm);
-      setEditingContId(null);
-    } else {
-      await addDoc(collection(db, 'contents'), { ...contForm, createdAt: new Date().toISOString() });
+    setSaving(true);
+    try {
+      if (editingContId) {
+        await updateDoc(doc(db, 'contents', editingContId), contForm);
+        setEditingContId(null);
+      } else {
+        await addDoc(collection(db, 'contents'), { ...contForm, createdAt: new Date().toISOString() });
+      }
+      setContForm({ 
+        categoryId: '', 
+        title: '', 
+        description: '', 
+        type: ContentType.VIDEO, 
+        url: '', 
+        status: 'free',
+        links: [],
+        accessLevel: 'public'
+      });
+    } catch (error) {
+      console.error("Error saving content:", error);
+      alert("Erro ao salvar conteúdo. Tente novamente.");
+    } finally {
+      setSaving(false);
     }
-    setContForm({ 
-      categoryId: '', 
-      title: '', 
-      description: '', 
-      type: ContentType.VIDEO, 
-      url: '', 
-      status: 'free',
-      links: [],
-      accessLevel: 'public'
-    });
   };
 
   const startEditCategory = (cat: Category) => {
@@ -808,20 +826,28 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   };
 
   const handleSeedData = async () => {
-    if (categories.length > 0) return;
+    if (categories.length > 0 || saving) return;
     
-    const initialCategories = [
-      { name: 'Desenvolvimento Pessoal', description: 'Cursos para melhorar sua produtividade, mentalidade e hábitos.', order: 0, isVisible: true },
-      { name: 'Estudos Bíblicos', description: 'Aprofunde seu conhecimento nas escrituras com materiais exclusivos.', order: 1, isVisible: true },
-      { name: 'Finanças', description: 'Aprenda a gerir seu dinheiro, investir e alcançar a liberdade financeira.', order: 2, isVisible: true },
-      { name: 'Liderança', description: 'Desenvolva habilidades de gestão e influência para liderar equipes.', order: 3, isVisible: true },
-      { name: 'Cursos Técnicos', description: 'Aprenda novas profissões e habilidades práticas.', order: 4, isVisible: true }
-    ];
+    setSaving(true);
+    try {
+      const initialCategories = [
+        { name: 'Desenvolvimento Pessoal', description: 'Cursos para melhorar sua produtividade, mentalidade e hábitos.', order: 0, isVisible: true, accessLevel: 'public' },
+        { name: 'Estudos Bíblicos', description: 'Aprofunde seu conhecimento nas escrituras com materiais exclusivos.', order: 1, isVisible: true, accessLevel: 'public' },
+        { name: 'Finanças', description: 'Aprenda a gerir seu dinheiro, investir e alcançar a liberdade financeira.', order: 2, isVisible: true, accessLevel: 'public' },
+        { name: 'Liderança', description: 'Desenvolva habilidades de gestão e influência para liderar equipes.', order: 3, isVisible: true, accessLevel: 'public' },
+        { name: 'Cursos Técnicos', description: 'Aprenda novas profissões e habilidades práticas.', order: 4, isVisible: true, accessLevel: 'public' }
+      ];
 
-    for (const cat of initialCategories) {
-      await addDoc(collection(db, 'categories'), cat);
+      for (const cat of initialCategories) {
+        await addDoc(collection(db, 'categories'), cat);
+      }
+      alert('Categorias iniciais adicionadas!');
+    } catch (error) {
+      console.error("Error seeding data:", error);
+      alert("Erro ao adicionar categorias. Tente novamente.");
+    } finally {
+      setSaving(false);
     }
-    alert('Categorias iniciais adicionadas!');
   };
 
   return (
@@ -830,8 +856,12 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
         <h1 className="text-3xl font-bold text-gray-900">Painel Administrativo</h1>
         <div className="flex items-center space-x-4">
           {categories.length === 0 && (
-            <button onClick={handleSeedData} className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors">
-              Semear Dados Iniciais
+            <button 
+              onClick={handleSeedData} 
+              disabled={saving}
+              className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Semeando...' : 'Semear Dados Iniciais'}
             </button>
           )}
           <div className="flex bg-gray-100 p-1 rounded-xl">
@@ -911,8 +941,15 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   </label>
                 </div>
                 <div className="flex space-x-2">
-                  <button type="submit" className={cn("flex-1 py-2 rounded-xl font-bold transition-colors", editingCatId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white")}>
-                    {editingCatId ? 'Salvar Alterações' : 'Criar Categoria'}
+                  <button 
+                    type="submit" 
+                    disabled={saving}
+                    className={cn(
+                      "flex-1 py-2 rounded-xl font-bold transition-colors disabled:opacity-50", 
+                      editingCatId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                    )}
+                  >
+                    {saving ? 'Processando...' : (editingCatId ? 'Salvar Alterações' : 'Criar Categoria')}
                   </button>
                   {editingCatId && (
                     <button 
@@ -1136,8 +1173,15 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   </select>
                 </div>
                 <div className="flex space-x-2">
-                  <button type="submit" className={cn("flex-1 py-2 rounded-xl font-bold transition-colors", editingContId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white")}>
-                    {editingContId ? 'Salvar Alterações' : 'Adicionar Conteúdo'}
+                  <button 
+                    type="submit" 
+                    disabled={saving}
+                    className={cn(
+                      "flex-1 py-2 rounded-xl font-bold transition-colors disabled:opacity-50", 
+                      editingContId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                    )}
+                  >
+                    {saving ? 'Processando...' : (editingContId ? 'Salvar Alterações' : 'Adicionar Conteúdo')}
                   </button>
                   {editingContId && (
                     <button 
