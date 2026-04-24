@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
-import { supabase } from './supabaseClient';
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 import type { User } from '@supabase/supabase-js';
 import { Category, Content, ContentLink, ContentType, Favorite } from './types';
 import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download } from 'lucide-react';
@@ -1275,6 +1275,44 @@ const Admin = ({ categories, contents, isAdmin, user }: { categories: Category[]
 // --- Main App ---
 
 export default function App() {
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center">
+        <div className="max-w-md bg-white p-8 rounded-2xl shadow-xl">
+          <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <Settings className="w-8 h-8 text-indigo-600 animate-spin" style={{ animationDuration: '3s' }} />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Configuração Necessária</h1>
+          <p className="text-gray-600 mb-6 text-sm leading-relaxed">
+            Parece que as variáveis de ambiente do Supabase ainda não foram configuradas.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
+            <p className="text-xs text-amber-800 font-bold mb-3 uppercase tracking-wider flex items-center">
+              <Lock className="w-3 h-3 mr-1" /> Como configurar:
+            </p>
+            <ul className="text-xs text-amber-900 space-y-3">
+              <li className="flex items-start">
+                <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">1</span>
+                <span>Abra o menu <b>Settings</b> no topo do painel lateral.</span>
+              </li>
+              <li className="flex items-start">
+                <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">2</span>
+                <span>Adicione <b>VITE_SUPABASE_URL</b> (ex: https://xyz.supabase.co).</span>
+              </li>
+              <li className="flex items-start">
+                <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">3</span>
+                <span>Adicione <b>VITE_SUPABASE_ANON_KEY</b> (sua chave anon pública).</span>
+              </li>
+            </ul>
+          </div>
+          <p className="text-[10px] text-gray-400 italic">
+            O aplicativo carregará automaticamente após você fornecer as credenciais.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
