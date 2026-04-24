@@ -1336,8 +1336,14 @@ export default function App() {
 
   const fetchCategories = async () => {
     const { data, error } = await supabase.from('categories').select('*').order('order', { ascending: true });
-    if (error) console.error("Error fetching categories:", error);
-    else setCategories(data || []);
+    if (error) {
+      console.error("Erro ao buscar categorias:", error);
+      if (error.code === '42P01') {
+        console.warn("A tabela 'categories' não foi encontrada. Verifique o script SQL.");
+      }
+    } else {
+      setCategories(data || []);
+    }
   };
 
   const fetchContents = async () => {
@@ -1346,15 +1352,24 @@ export default function App() {
       query = query.eq('accessLevel', 'public');
     }
     const { data, error } = await query.order('createdAt', { ascending: false });
-    if (error) console.error("Error fetching contents:", error);
-    else setContents(data || []);
+    if (error) {
+      console.error("Erro ao buscar conteúdos:", error);
+      if (error.code === '42P01') {
+        console.warn("A tabela 'contents' não foi encontrada. Verifique o script SQL.");
+      }
+    } else {
+      setContents(data || []);
+    }
   };
 
   const fetchFavorites = async () => {
     if (!user) return;
     const { data, error } = await supabase.from('favorites').select('*').eq('userId', user.id);
-    if (error) console.error("Error fetching favorites:", error);
-    else setFavorites(data || []);
+    if (error) {
+      console.error("Erro ao buscar favoritos:", error);
+    } else {
+      setFavorites(data || []);
+    }
   };
 
   useEffect(() => {
