@@ -1343,9 +1343,15 @@ export default function App() {
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     const init = async () => {
-      setLoading(true);
-      await Promise.all([fetchCategories(), fetchContents()]);
-      setLoading(false);
+      try {
+        setLoading(true);
+        await Promise.all([fetchCategories(), fetchContents()]);
+      } catch (err: any) {
+        console.error("Init error:", err);
+        setDbError({ message: err.message, code: err.code || 'INIT_ERROR' });
+      } finally {
+        setLoading(false);
+      }
     };
     init();
 
@@ -1394,7 +1400,7 @@ export default function App() {
               </li>
               <li className="flex items-start">
                 <span className="bg-amber-200 text-amber-800 w-4 h-4 rounded-full flex items-center justify-center mr-2 shrink-0">3</span>
-                <span>Adicione <b>VITE_SUPABASE_ANON_KEY</b> (sua chave anon pública).</span>
+                <span>Adicione <b>VITE_SUPABASE_ANON_KEY</b> (use a chave <b>anon (public)</b>, nunca a service_role).</span>
               </li>
             </ul>
           </div>
@@ -1407,6 +1413,8 @@ export default function App() {
   }
 
   if (dbError && dbError.code !== '42P01') {
+    const isSecretKeyError = dbError.message?.includes('secret API key');
+    
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-red-100">
@@ -1415,18 +1423,33 @@ export default function App() {
           </div>
           <h1 className="text-xl font-bold text-gray-900 mb-2">Erro na Conexão</h1>
           <p className="text-gray-600 text-sm mb-6 leading-relaxed">
-            Houve um problema ao carregar os dados do banco.
+            {isSecretKeyError 
+              ? "Você usou uma Chave de API Secreta (service_role) em vez da Chave Anon (pública)."
+              : "Houve um problema ao carregar os dados do banco."}
           </p>
-          <div className="bg-gray-50 rounded-xl p-4 text-left mb-6 font-mono text-[10px] text-gray-500 overflow-auto max-h-32">
-            <p className="font-bold text-gray-700 mb-1">Detalhes do erro:</p>
-            <p>Code: {dbError.code}</p>
-            <p>Message: {dbError.message}</p>
-          </div>
+
+          {isSecretKeyError ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
+              <p className="text-xs text-amber-800 font-bold mb-2">Como Corrigir:</p>
+              <ol className="text-xs text-amber-900 space-y-2">
+                <li>1. Vá no menu <b>Settings</b>.</li>
+                <li>2. No campo <b>VITE_SUPABASE_ANON_KEY</b>, apague a chave atual.</li>
+                <li>3. Cole a chave chamada <b>anon / public</b> do seu dashboard Supabase.</li>
+              </ol>
+            </div>
+          ) : (
+            <div className="bg-gray-50 rounded-xl p-4 text-left mb-6 font-mono text-[10px] text-gray-500 overflow-auto max-h-32">
+              <p className="font-bold text-gray-700 mb-1">Detalhes do erro:</p>
+              <p>Code: {dbError.code || 'N/A'}</p>
+              <p>Message: {dbError.message}</p>
+            </div>
+          )}
+
           <button 
             onClick={() => window.location.reload()}
             className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
           >
-            Tentar Novamente
+            {isSecretKeyError ? "Já corrigi, recarregar" : "Tentar Novamente"}
           </button>
         </div>
       </div>
