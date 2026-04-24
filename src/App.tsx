@@ -203,17 +203,38 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
   const [search, setSearch] = useState('');
   
   const filteredCategories = categories.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || 
-                         c.description.toLowerCase().includes(search.toLowerCase());
+    const name = c.name || '';
+    const desc = c.description || '';
+    const matchesSearch = name.toLowerCase().includes(search.toLowerCase()) || 
+                         desc.toLowerCase().includes(search.toLowerCase());
     const isVisible = isAdmin || c.isVisible !== false;
     return matchesSearch && isVisible;
   });
 
   const [activeSegment, setActiveSegment] = useState<'public' | 'private'>('public');
   
+  // Resiliently check access level, defaulting missing ones to 'public'
   const displayedCategories = filteredCategories.filter(c => {
-    return c.accessLevel === activeSegment;
+    const level = c.accessLevel || 'public';
+    return level === activeSegment;
   });
+
+  const hasItemsInOtherTab = filteredCategories.some(c => {
+    const level = c.accessLevel || 'public';
+    return level !== activeSegment;
+  });
+
+  // Auto-switch tabs if the current one is empty but the other has content
+  useEffect(() => {
+    const hasPublic = filteredCategories.some(c => (c.accessLevel || 'public') === 'public');
+    const hasPrivate = filteredCategories.some(c => c.accessLevel === 'private');
+
+    if (activeSegment === 'public' && !hasPublic && hasPrivate) {
+      setActiveSegment('private');
+    } else if (activeSegment === 'private' && !hasPrivate && hasPublic) {
+      setActiveSegment('public');
+    }
+  }, [filteredCategories, activeSegment]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -290,16 +311,16 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
           {displayedCategories.map((category) => (
             <Link 
               key={category.id} 
-              to={category.accessLevel === 'private' && !user ? '#' : `/category/${category.id}`}
+              to={(category.accessLevel || 'public') === 'private' && !user ? '#' : `/category/${category.id}`}
               onClick={(e) => {
-                if (category.accessLevel === 'private' && !user) {
+                if ((category.accessLevel || 'public') === 'private' && !user) {
                   e.preventDefault();
                   alert("Esta categoria é exclusiva para membros. Por favor, faça login para acessar.");
                 }
               }}
               className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
             >
-              {category.accessLevel === 'private' && (
+              {(category.accessLevel || 'public') === 'private' && (
                 <div className="absolute top-4 right-4 z-10">
                   <div className="bg-white/90 backdrop-blur text-indigo-600 p-2 rounded-xl shadow-lg border border-white/20">
                     <Lock className="w-4 h-4" />
@@ -319,13 +340,13 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
                 <div className="flex items-center space-x-2 mb-2">
                   <span className={cn(
                     "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
-                    category.accessLevel === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
+                    (category.accessLevel || 'public') === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
                   )}>
-                    {category.accessLevel === 'private' ? 'Exclusivo' : 'Público'}
+                    {(category.accessLevel || 'public') === 'private' ? 'Exclusivo' : 'Gratuito'}
                   </span>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name}</h3>
-                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description}</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name || 'Sem nome'}</h3>
+                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description || 'Nenhuma descrição'}</p>
                 <div className="mt-4 flex items-center text-indigo-600 font-semibold text-sm">
                   Ver conteúdos <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
                 </div>
@@ -335,13 +356,37 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
         </div>
       )}
 
+      {displayedCategories.length === 0 && filteredCategories.length > 0 && !search && (
+        <div className="text-center py-20">
+          <div className="bg-indigo-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+            <Search className="text-indigo-400 w-8 h-8" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900">
+            Nenhuma categoria {activeSegment === 'public' ? 'gratuita' : 'exclusiva'} encontrada
+          </h3>
+          <p className="text-gray-500 mt-2">
+            Confira a aba {activeSegment === 'public' ? 'Exclusivo' : 'Gratuito'} para ver outros conteúdos!
+          </p>
+          <button 
+            onClick={() => setActiveSegment(activeSegment === 'public' ? 'private' : 'public')}
+            className="mt-6 text-indigo-600 font-bold hover:underline"
+          >
+            Mudar para aba {activeSegment === 'public' ? 'Exclusivo' : 'Gratuito'}
+          </button>
+        </div>
+      )}
+
       {filteredCategories.length === 0 && (
         <div className="text-center py-20">
           <div className="bg-gray-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
             <Search className="text-gray-400 w-8 h-8" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900">Nenhuma categoria encontrada</h3>
-          <p className="text-gray-500">Tente buscar por outros termos.</p>
+          <h3 className="text-lg font-medium text-gray-900">
+            {search ? 'Nenhuma categoria encontrada' : 'Aguardando conteúdos...'}
+          </h3>
+          <p className="text-gray-500 mt-2">
+            {search ? 'Tente buscar por outros termos.' : 'Em breve teremos novos materiais para você nesta seção.'}
+          </p>
         </div>
       )}
     </div>
@@ -355,8 +400,10 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
   const [search, setSearch] = useState('');
 
   const filteredContents = categoryContents.filter(c => {
-    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
-                         c.description.toLowerCase().includes(search.toLowerCase());
+    const title = c.title || '';
+    const desc = c.description || '';
+    const matchesSearch = title.toLowerCase().includes(search.toLowerCase()) || 
+                         desc.toLowerCase().includes(search.toLowerCase());
     const isVisible = isAdmin || c.status !== 'hidden';
     return matchesSearch && isVisible;
   });
@@ -415,8 +462,8 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2">
-                <h3 className="text-lg font-bold text-gray-900 truncate">{content.title}</h3>
-                {content.accessLevel === 'private' && (
+                <h3 className="text-lg font-bold text-gray-900 truncate">{content.title || 'Sem título'}</h3>
+                {((content.accessLevel || 'public') === 'private') && (
                   <span className={cn(
                     "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase",
                     user ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
@@ -425,7 +472,7 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
                   </span>
                 )}
               </div>
-              <p className="text-gray-500 text-sm line-clamp-1">{content.description}</p>
+              <p className="text-gray-500 text-sm line-clamp-1">{content.description || 'Nenhuma descrição disponível'}</p>
             </div>
             <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
               <button 
@@ -438,9 +485,9 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
                 <Star className={cn("w-5 h-5", isFavorite(content.id) && "fill-current")} />
               </button>
               <Link 
-                to={content.accessLevel === 'private' && !user ? '#' : `/content/${content.id}`}
+                to={(content.accessLevel || 'public') === 'private' && !user ? '#' : `/content/${content.id}`}
                 onClick={(e) => {
-                  if (content.accessLevel === 'private' && !user) {
+                  if ((content.accessLevel || 'public') === 'private' && !user) {
                     e.preventDefault();
                     alert("Acesso exclusivo para membros. Por favor, faça login.");
                   }
@@ -1216,8 +1263,12 @@ export default function App() {
 
     const unsubConts = onSnapshot(qConts, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Content));
-      // Sort in memory by date descending
-      setContents(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+      // Sort in memory by date descending, with safety checks
+      setContents(data.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      }));
     }, (error) => {
       console.error("Error fetching contents:", error);
     });
