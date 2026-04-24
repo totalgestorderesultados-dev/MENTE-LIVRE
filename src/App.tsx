@@ -71,11 +71,35 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 
   const handleLoginPopup = async () => {
     setLoginError(null);
+    const email = window.prompt("Insira seu e-mail para receber um link de acesso:");
+    if (!email) return;
+
     try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: window.location.origin + window.location.pathname,
+        },
+      });
+      if (error) throw error;
+      alert("Link de acesso enviado! Verifique sua caixa de entrada.");
+    } catch (error: any) {
+      console.error("Login error:", error);
+      setLoginError(`Erro: ${error.message || "Falha ao enviar e-mail"}`);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setLoginError(null);
+    try {
+      const redirectUrl = window.location.origin + window.location.pathname;
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.href,
+          redirectTo: redirectUrl,
+          queryParams: {
+            prompt: 'select_account'
+          }
         },
       });
       if (error) throw error;
@@ -83,7 +107,7 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
       console.error("Login error:", error);
       let msg = error.message || "Falha ao entrar";
       if (msg.includes("provider is not enabled")) {
-        msg = "Provedor Google não ativado no Supabase. Vá em Authentication -> Providers e ative o Google.";
+        msg = "Provedor Google não ativado no Supabase.";
       }
       setLoginError(`Erro: ${msg}`);
     }
@@ -114,7 +138,7 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden md:flex items-center space-x-2">
             <Link to="/" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Início</Link>
             
             {user ? (
@@ -137,13 +161,19 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
               <div className="flex items-center space-x-2">
                 <button 
                   onClick={handleLoginPopup} 
-                  className="flex items-center space-x-2 bg-white text-gray-700 border border-gray-200 px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+                  className="flex items-center space-x-2 bg-indigo-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
+                  title="Entrar com E-mail"
                 >
-                  <img src="https://www.google.com/favicon.ico" className="w-4 h-4 mr-1" alt="Google" />
-                  <span>Entrar com Google</span>
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>E-mail</span>
                 </button>
-                <button onClick={handleLoginPopup} className="text-gray-300 hover:text-indigo-400 p-1" title="Login Admin">
-                  <Settings className="w-4 h-4" />
+                <button 
+                  onClick={handleGoogleLogin} 
+                  className="flex items-center space-x-2 bg-white text-gray-700 border border-gray-200 px-3 py-2 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+                  title="Entrar com Google"
+                >
+                  <img src="https://www.google.com/favicon.ico" className="w-3.5 h-3.5" alt="Google" />
+                  <span>Google</span>
                 </button>
               </div>
             )}
@@ -177,10 +207,18 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
             <div className="pt-4 border-t border-gray-100 space-y-3">
               <button 
                 onClick={handleLoginPopup} 
-                className="w-full bg-white text-gray-700 border border-gray-200 px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+                className="w-full bg-indigo-600 text-white px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg active:scale-95 transition-all"
+              >
+                <FileText className="w-5 h-5 mr-3" />
+                Receber Link de Acesso por E-mail
+              </button>
+              
+              <button 
+                onClick={handleGoogleLogin} 
+                className="w-full bg-white text-gray-700 border border-gray-200 px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-sm active:scale-95 transition-all"
               >
                 <img src="https://www.google.com/favicon.ico" className="w-5 h-5 mr-3" alt="Google" />
-                Entrar com Google
+                Tentar com Google
               </button>
             </div>
           )}
