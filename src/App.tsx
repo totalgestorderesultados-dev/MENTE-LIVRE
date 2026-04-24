@@ -75,13 +75,17 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: window.location.href,
         },
       });
       if (error) throw error;
     } catch (error: any) {
       console.error("Login error:", error);
-      setLoginError(`Erro: ${error.message || "Falha ao entrar"}`);
+      let msg = error.message || "Falha ao entrar";
+      if (msg.includes("provider is not enabled")) {
+        msg = "Provedor Google não ativado no Supabase. Vá em Authentication -> Providers e ative o Google.";
+      }
+      setLoginError(`Erro: ${msg}`);
     }
   };
 
@@ -116,8 +120,9 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
             {user ? (
               <div className="flex items-center space-x-4">
                 {isAdmin && (
-                  <Link to="/admin" className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Painel Admin">
-                    <Settings className="w-5 h-5" />
+                  <Link to="/admin" className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors" title="Painel Admin">
+                    <Settings className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Painel Admin</span>
                   </Link>
                 )}
                 <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
@@ -132,10 +137,10 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
               <div className="flex items-center space-x-2">
                 <button 
                   onClick={handleLoginPopup} 
-                  className="flex items-center space-x-2 bg-indigo-600 text-white px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
+                  className="flex items-center space-x-2 bg-white text-gray-700 border border-gray-200 px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-gray-50 transition-all shadow-sm active:scale-95"
                 >
-                  <LogIn className="w-4 h-4" />
-                  <span>Entrar / Cadastro</span>
+                  <img src="https://www.google.com/favicon.ico" className="w-4 h-4 mr-1" alt="Google" />
+                  <span>Entrar com Google</span>
                 </button>
                 <button onClick={handleLoginPopup} className="text-gray-300 hover:text-indigo-400 p-1" title="Login Admin">
                   <Settings className="w-4 h-4" />
@@ -170,11 +175,12 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
             </div>
           ) : (
             <div className="pt-4 border-t border-gray-100 space-y-3">
-              <button onClick={handleLoginPopup} className="w-full bg-indigo-600 text-white px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg shadow-indigo-100">
-                <LogIn className="w-4 h-4 mr-2" /> Entrar / Cadastro
-              </button>
-              <button onClick={handleLoginPopup} className="w-full text-gray-400 text-xs py-2 flex items-center justify-center">
-                <Settings className="w-3 h-3 mr-1" /> Login Administrativo
+              <button 
+                onClick={handleLoginPopup} 
+                className="w-full bg-white text-gray-700 border border-gray-200 px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-sm active:scale-95"
+              >
+                <img src="https://www.google.com/favicon.ico" className="w-5 h-5 mr-3" alt="Google" />
+                Entrar com Google
               </button>
             </div>
           )}
@@ -239,6 +245,18 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+
+        {isAdmin && categories.length === 0 && (
+          <div className="mt-6 max-w-xl mx-auto bg-indigo-50 rounded-2xl p-6 text-left border border-indigo-100 animate-pulse">
+            <div className="flex items-center space-x-3 mb-2 text-indigo-700 font-bold">
+              <Plus className="w-5 h-5 shadow-sm bg-white rounded-full p-1" />
+              <span>Modo Administrador Ativado</span>
+            </div>
+            <p className="text-sm text-indigo-600 leading-relaxed">
+              Ficou tudo pronto! Como você ainda não tem conteúdos, vá ao painel do <b>Supabase</b> e insira dados nas tabelas <code className="bg-white/50 px-1 rounded">categories</code> e <code className="bg-white/50 px-1 rounded">contents</code>.
+            </p>
+          </div>
+        )}
 
         <div className="mt-8 flex justify-center">
           <div className="inline-flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
@@ -1346,7 +1364,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       addLog(session ? `Sessão encontrada: ${session.user.email}` : "Nenhuma sessão ativa.");
       setUser(session?.user ?? null);
-      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
+      setIsAdmin(session?.user?.email?.toLowerCase() === 'edsonfinanceiro2017@gmail.com');
     }).catch(err => {
       addLog(`Erro na sessão: ${err.message}`);
     });
@@ -1354,7 +1372,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       addLog(`Mudança de estado auth: ${_event}`);
       setUser(session?.user ?? null);
-      setIsAdmin(session?.user?.email === 'edsonfinanceiro2017@gmail.com');
+      setIsAdmin(session?.user?.email?.toLowerCase() === 'edsonfinanceiro2017@gmail.com');
     });
 
     return () => subscription.unsubscribe();
