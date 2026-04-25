@@ -210,6 +210,13 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
   });
 
   const [activeSegment, setActiveSegment] = useState<'public' | 'private'>('public');
+
+  // Auto-switch to private if user logs in and we are on public tab
+  useEffect(() => {
+    if (user && activeSegment === 'public') {
+      setActiveSegment('private');
+    }
+  }, [user]);
   
   const displayedCategories = filteredCategories.filter(c => {
     return c.accessLevel === activeSegment;
@@ -286,53 +293,85 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {displayedCategories.map((category) => (
-            <Link 
-              key={category.id} 
-              to={category.accessLevel === 'private' && !user ? '#' : `/category/${category.id}`}
-              onClick={(e) => {
-                if (category.accessLevel === 'private' && !user) {
-                  e.preventDefault();
-                  alert("Esta categoria é exclusiva para membros. Por favor, faça login para acessar.");
-                }
-              }}
-              className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
-            >
-              {category.accessLevel === 'private' && (
-                <div className="absolute top-4 right-4 z-10">
-                  <div className="bg-white/90 backdrop-blur text-indigo-600 p-2 rounded-xl shadow-lg border border-white/20">
-                    <Lock className="w-4 h-4" />
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            {displayedCategories.map((category) => (
+              <Link 
+                key={category.id} 
+                to={category.accessLevel === 'private' && !user ? '#' : `/category/${category.id}`}
+                onClick={(e) => {
+                  if (category.accessLevel === 'private' && !user) {
+                    e.preventDefault();
+                    alert("Esta categoria é exclusiva para membros. Por favor, faça login para acessar.");
+                  }
+                }}
+                className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
+              >
+                {category.accessLevel === 'private' && (
+                  <div className="absolute top-4 right-4 z-10">
+                    <div className="bg-white/90 backdrop-blur text-indigo-600 p-2 rounded-xl shadow-lg border border-white/20">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                  </div>
+                )}
+                <div className="aspect-video bg-gray-100 relative overflow-hidden">
+                  <img 
+                    src={category.imageUrl || `https://picsum.photos/seed/${category.name}/800/450`} 
+                    alt={category.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
+                </div>
+                <div className="p-6">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <span className={cn(
+                      "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
+                      category.accessLevel === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
+                    )}>
+                      {category.accessLevel === 'private' ? 'Exclusivo' : 'Público'}
+                    </span>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name}</h3>
+                  <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description}</p>
+                  <div className="mt-4 flex items-center text-indigo-600 font-semibold text-sm">
+                    Ver conteúdos <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </div>
+              </Link>
+            ))}
+          </div>
+
+          {displayedCategories.length === 0 && (
+            <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm max-w-xl mx-auto">
+              <div className="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <BookOpen className="text-gray-400 w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Sem conteúdos em "{activeSegment === 'public' ? 'Gratuito' : 'Exclusivo'}"</h3>
+              <p className="text-gray-500 text-sm mb-6">
+                {activeSegment === 'public' 
+                  ? "Ainda não há materiais gratuitos aqui. Tente conferir a aba 'Exclusivo'." 
+                  : "Você ainda não tem acesso a materiais exclusivos ou eles ainda não foram postados."}
+              </p>
+              {activeSegment === 'public' && filteredCategories.some(c => c.accessLevel === 'private') && (
+                <button 
+                  onClick={() => setActiveSegment('private')}
+                  className="text-indigo-600 font-bold hover:underline text-sm"
+                >
+                  Ver conteúdos exclusivos →
+                </button>
               )}
-              <div className="aspect-video bg-gray-100 relative overflow-hidden">
-                <img 
-                  src={category.imageUrl || `https://picsum.photos/seed/${category.name}/800/450`} 
-                  alt={category.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
-              </div>
-              <div className="p-6">
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
-                    category.accessLevel === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
-                  )}>
-                    {category.accessLevel === 'private' ? 'Exclusivo' : 'Público'}
-                  </span>
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name}</h3>
-                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description}</p>
-                <div className="mt-4 flex items-center text-indigo-600 font-semibold text-sm">
-                  Ver conteúdos <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+               {activeSegment === 'private' && filteredCategories.some(c => c.accessLevel === 'public') && (
+                <button 
+                  onClick={() => setActiveSegment('public')}
+                  className="text-indigo-600 font-bold hover:underline text-sm"
+                >
+                  Ver conteúdos gratuitos →
+                </button>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {filteredCategories.length === 0 && (
