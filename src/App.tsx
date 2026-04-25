@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
-import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, User, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc, getDocs, limit } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import { Category, Content, ContentLink, ContentType, Favorite } from './types';
-import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download, AlertTriangle, Check, Activity, CheckCircle2, ArrowRight } from 'lucide-react';
-import { motion } from 'motion/react';
+import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download } from 'lucide-react';
 import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
 
 // --- Components ---
@@ -63,16 +64,57 @@ const PwaInstaller = () => {
       </div>
     </div>
   );
-};const Navbar = ({ isAdmin, onAdminAuth, onLogout }: { isAdmin: boolean, onAdminAuth: () => void, onLogout: () => void }) => {
+};
+
+const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const handleLoginPopup = async () => {
+    setLoginError(null);
+    const provider = new GoogleAuthProvider();
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      console.error("Login popup error:", error);
+      if (error.code === 'auth/popup-blocked') {
+        setLoginError("O popup foi bloqueado. Tente o botão 'Alternativo' ao lado.");
+      } else if (error.code === 'auth/unauthorized-domain') {
+        setLoginError("Erro: Este domínio não está autorizado no Firebase. Por favor, me avise para eu corrigir.");
+      } else {
+        setLoginError(`Erro: ${error.message || "Falha ao entrar"}`);
+      }
+    }
+  };
+
+  const handleLoginRedirect = async () => {
+    setLoginError(null);
+    const provider = new GoogleAuthProvider();
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      await signInWithRedirect(auth, provider);
+    } catch (error: any) {
+      console.error("Login redirect error:", error);
+      setLoginError(`Erro Redirecionamento: ${error.message}`);
+    }
+  };
+
+  const handleLogout = () => signOut(auth);
+
   return (
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <PwaInstaller />
+      {loginError && (
+        <div className="bg-red-600 text-white text-center py-2 text-sm font-medium px-4 flex items-center justify-center">
+          <span>{loginError}</span>
+          <button onClick={() => setLoginError(null)} className="ml-4 bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-xs">Fechar</button>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-2" onClick={() => setIsMenuOpen(false)}>
+            <Link to="/" className="flex items-center space-x-2">
               <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
                 <BookOpen className="text-white w-5 h-5" />
               </div>
@@ -81,35 +123,35 @@ const PwaInstaller = () => {
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-2">
+          <div className="hidden md:flex items-center space-x-4">
             <Link to="/" className="text-gray-600 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Início</Link>
             
-            {isAdmin ? (
+            {user ? (
               <div className="flex items-center space-x-4">
-                <Link to="/admin" className="flex items-center space-x-2 bg-indigo-50 text-indigo-700 px-4 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-colors" title="Painel Admin">
-                  <Settings className="w-4 h-4" />
-                  <span className="text-xs font-bold uppercase tracking-wider">Painel Admin</span>
-                </Link>
+                {isAdmin && (
+                  <Link to="/admin" className="text-gray-400 hover:text-indigo-600 p-2 rounded-full transition-colors" title="Painel Admin">
+                    <Settings className="w-5 h-5" />
+                  </Link>
+                )}
                 <div className="flex items-center space-x-2 bg-gray-50 px-3 py-1.5 rounded-full border border-gray-100">
-                  <div className="w-7 h-7 bg-indigo-600 rounded-full flex items-center justify-center text-white text-[10px] shadow-sm">ADM</div>
+                  <img src={user.photoURL || ''} alt="" className="w-6 h-6 rounded-full border border-gray-200" />
+                  <span className="text-xs font-bold text-gray-700">{user.displayName?.split(' ')[0]}</span>
                 </div>
-                <button 
-                  onClick={onLogout}
-                  className="text-gray-400 hover:text-red-500 p-2 rounded-full transition-colors"
-                  title="Sair"
-                >
+                <button onClick={handleLogout} className="text-gray-400 hover:text-red-600 p-2 rounded-full transition-colors" title="Sair">
                   <LogOut className="w-5 h-5" />
                 </button>
               </div>
             ) : (
               <div className="flex items-center space-x-2">
                 <button 
-                  onClick={onAdminAuth} 
-                  className="flex items-center space-x-2 bg-indigo-600 text-white px-3 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
-                  title="Acesso Administrador"
+                  onClick={handleLoginPopup} 
+                  className="flex items-center space-x-2 bg-indigo-600 text-white px-5 py-2.5 rounded-2xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg active:scale-95"
                 >
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Admin</span>
+                  <LogIn className="w-4 h-4" />
+                  <span>Entrar / Cadastro</span>
+                </button>
+                <button onClick={handleLoginPopup} className="text-gray-300 hover:text-indigo-400 p-1" title="Login Admin">
+                  <Settings className="w-4 h-4" />
                 </button>
               </div>
             )}
@@ -131,33 +173,21 @@ const PwaInstaller = () => {
           {isAdmin && (
             <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-600 hover:text-indigo-600 py-2 font-medium">Painel Admin</Link>
           )}
-          {isAdmin ? (
+          {user ? (
             <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center text-white font-bold shadow-sm">ADM</div>
-                <span className="text-sm font-bold text-gray-900">Administrador</span>
+              <div className="flex items-center space-x-2">
+                <img src={user.photoURL || ''} alt="" className="w-8 h-8 rounded-full shadow-sm" />
+                <span className="font-bold text-gray-700">{user.displayName}</span>
               </div>
-              <button 
-                onClick={() => {
-                  onLogout();
-                  setIsMenuOpen(false);
-                }} 
-                className="text-red-500 font-bold bg-red-50 px-4 py-2 rounded-xl text-sm"
-              >
-                Sair
-              </button>
+              <button onClick={handleLogout} className="text-red-500 font-bold bg-red-50 px-4 py-2 rounded-xl text-sm">Sair</button>
             </div>
           ) : (
             <div className="pt-4 border-t border-gray-100 space-y-3">
-              <button 
-                onClick={() => {
-                  onAdminAuth();
-                  setIsMenuOpen(false);
-                }} 
-                className="w-full bg-indigo-600 text-white px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg active:scale-95 transition-all"
-              >
-                <Lock className="w-5 h-5 mr-3" />
-                Painel Administrativo
+              <button onClick={handleLoginPopup} className="w-full bg-indigo-600 text-white px-4 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg shadow-indigo-100">
+                <LogIn className="w-4 h-4 mr-2" /> Entrar / Cadastro
+              </button>
+              <button onClick={handleLoginPopup} className="w-full text-gray-400 text-xs py-2 flex items-center justify-center">
+                <Settings className="w-3 h-3 mr-1" /> Login Administrativo
               </button>
             </div>
           )}
@@ -169,42 +199,21 @@ const PwaInstaller = () => {
 
 // --- Pages ---
 
-const Home = ({ categories, isAdmin }: { categories: Category[], isAdmin: boolean }) => {
+const Home = ({ categories, user, isAdmin }: { categories: Category[], user: User | null, isAdmin: boolean }) => {
   const [search, setSearch] = useState('');
   
   const filteredCategories = categories.filter(c => {
-    const name = c.name || '';
-    const desc = c.description || '';
-    const matchesSearch = name.toLowerCase().includes(search.toLowerCase()) || 
-                         desc.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || 
+                         c.description.toLowerCase().includes(search.toLowerCase());
     const isVisible = isAdmin || c.isVisible !== false;
     return matchesSearch && isVisible;
   });
 
   const [activeSegment, setActiveSegment] = useState<'public' | 'private'>('public');
   
-  // Resiliently check access level, defaulting missing ones to 'public'
   const displayedCategories = filteredCategories.filter(c => {
-    const level = c.accessLevel || 'public';
-    return level === activeSegment;
+    return c.accessLevel === activeSegment;
   });
-
-  const hasItemsInOtherTab = filteredCategories.some(c => {
-    const level = c.accessLevel || 'public';
-    return level !== activeSegment;
-  });
-
-  // Auto-switch tabs if the current one is empty but the other has content
-  useEffect(() => {
-    const hasPublic = filteredCategories.some(c => (c.accessLevel || 'public') === 'public');
-    const hasPrivate = filteredCategories.some(c => c.accessLevel === 'private');
-
-    if (activeSegment === 'public' && !hasPublic && hasPrivate) {
-      setActiveSegment('private');
-    } else if (activeSegment === 'private' && !hasPrivate && hasPublic) {
-      setActiveSegment('public');
-    }
-  }, [filteredCategories, activeSegment]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -223,23 +232,11 @@ const Home = ({ categories, isAdmin }: { categories: Category[], isAdmin: boolea
           />
         </div>
 
-        {isAdmin && categories.length === 0 && (
-          <div className="mt-6 max-w-xl mx-auto bg-indigo-50 rounded-2xl p-6 text-left border border-indigo-100 animate-pulse">
-            <div className="flex items-center space-x-3 mb-2 text-indigo-700 font-bold">
-              <Plus className="w-5 h-5 shadow-sm bg-white rounded-full p-1" />
-              <span>Modo Administrador Ativado</span>
-            </div>
-            <p className="text-sm text-indigo-600 leading-relaxed">
-              Ficou tudo pronto! Como você ainda não tem conteúdos, vá ao painel do <b>Supabase</b> e insira dados nas tabelas <code className="bg-white/50 px-1 rounded">categories</code> e <code className="bg-white/50 px-1 rounded">contents</code>.
-            </p>
-          </div>
-        )}
-
         <div className="mt-8 flex justify-center">
           <div className="inline-flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
             {[
               { id: 'public', label: 'Gratuito' },
-              { id: 'private', label: 'Exclusivo' }
+              { id: 'private', label: activeSegment === 'private' && !user ? 'Realizar Cadastro' : 'Exclusivo' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -251,34 +248,41 @@ const Home = ({ categories, isAdmin }: { categories: Category[], isAdmin: boolea
                     : "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
                 )}
               >
-                {tab.label}
+                {tab.id === 'private' && activeSegment === 'private' && !user ? (
+                   <div className="flex items-center">
+                     <LogIn className="w-4 h-4 mr-2" />
+                     {tab.label}
+                   </div>
+                ) : tab.label}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {activeSegment === 'private' && !isAdmin ? (
+      {activeSegment === 'private' && !user ? (
         <div className="bg-white rounded-3xl p-12 border border-gray-100 shadow-xl text-center max-w-2xl mx-auto py-16">
           <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
             <Lock className="text-indigo-600 w-10 h-10" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Área Restrita</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Área Exclusiva</h2>
           <p className="text-gray-600 mb-8 leading-relaxed">
-            Esta categoria contém materiais exclusivos. O acesso é restrito ao administrador do sistema.
+            Cadastre-se ou entre com sua conta Google agora para acessar cursos premium, 
+            materiais exclusivos e salvar seus conteúdos favoritos.
           </p>
           <div className="flex flex-col space-y-4 items-center">
             <button 
               onClick={() => {
                 const nav = document.querySelector('nav');
-                const adminBtn = nav?.querySelector('button[title="Acesso Administrador"]');
-                if (adminBtn instanceof HTMLButtonElement) adminBtn.click();
-                else alert("Clique no botão 'Admin' no topo da página.");
+                const loginBtn = nav?.querySelector('button[onClick*="handleLoginPopup"]');
+                if (loginBtn instanceof HTMLButtonElement) loginBtn.click();
+                else alert("Clique no botão 'Entrar' no topo da página.");
               }}
               className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-105"
             >
-              <Lock className="w-5 h-5 mr-2" /> Acesso Administrador
+              <LogIn className="w-5 h-5 mr-2" /> Começar Agora Gratuitamente
             </button>
+            <p className="text-xs text-gray-400">Acesso instantâneo via conta Google.</p>
           </div>
         </div>
       ) : (
@@ -286,16 +290,16 @@ const Home = ({ categories, isAdmin }: { categories: Category[], isAdmin: boolea
           {displayedCategories.map((category) => (
             <Link 
               key={category.id} 
-              to={(category.accessLevel || 'public') === 'private' && !isAdmin ? '#' : `/category/${category.id}`}
+              to={category.accessLevel === 'private' && !user ? '#' : `/category/${category.id}`}
               onClick={(e) => {
-                if ((category.accessLevel || 'public') === 'private' && !isAdmin) {
+                if (category.accessLevel === 'private' && !user) {
                   e.preventDefault();
-                  alert("Esta categoria é exclusiva para o administrador.");
+                  alert("Esta categoria é exclusiva para membros. Por favor, faça login para acessar.");
                 }
               }}
               className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
             >
-              {(category.accessLevel || 'public') === 'private' && (
+              {category.accessLevel === 'private' && (
                 <div className="absolute top-4 right-4 z-10">
                   <div className="bg-white/90 backdrop-blur text-indigo-600 p-2 rounded-xl shadow-lg border border-white/20">
                     <Lock className="w-4 h-4" />
@@ -315,13 +319,13 @@ const Home = ({ categories, isAdmin }: { categories: Category[], isAdmin: boolea
                 <div className="flex items-center space-x-2 mb-2">
                   <span className={cn(
                     "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
-                    (category.accessLevel || 'public') === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
+                    category.accessLevel === 'private' ? "bg-indigo-100 text-indigo-700" : "bg-green-100 text-green-700"
                   )}>
-                    {(category.accessLevel || 'public') === 'private' ? 'Exclusivo' : 'Gratuito'}
+                    {category.accessLevel === 'private' ? 'Exclusivo' : 'Público'}
                   </span>
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name || 'Sem nome'}</h3>
-                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description || 'Nenhuma descrição'}</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors">{category.name}</h3>
+                <p className="text-gray-600 text-sm line-clamp-2 leading-relaxed">{category.description}</p>
                 <div className="mt-4 flex items-center text-indigo-600 font-semibold text-sm">
                   Ver conteúdos <ChevronRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
                 </div>
@@ -331,62 +335,46 @@ const Home = ({ categories, isAdmin }: { categories: Category[], isAdmin: boolea
         </div>
       )}
 
-      {displayedCategories.length === 0 && filteredCategories.length > 0 && !search && (
-        <div className="text-center py-20">
-          <div className="bg-indigo-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-            <Search className="text-indigo-400 w-8 h-8" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900">
-            Nenhuma categoria {activeSegment === 'public' ? 'gratuita' : 'exclusiva'} encontrada
-          </h3>
-          <p className="text-gray-500 mt-2">
-            Confira a aba {activeSegment === 'public' ? 'Exclusivo' : 'Gratuito'} para ver outros conteúdos!
-          </p>
-          <button 
-            onClick={() => setActiveSegment(activeSegment === 'public' ? 'private' : 'public')}
-            className="mt-6 text-indigo-600 font-bold hover:underline"
-          >
-            Mudar para aba {activeSegment === 'public' ? 'Exclusivo' : 'Gratuito'}
-          </button>
-        </div>
-      )}
-
       {filteredCategories.length === 0 && (
         <div className="text-center py-20">
           <div className="bg-gray-50 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
             <Search className="text-gray-400 w-8 h-8" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900">
-            {search ? 'Nenhuma categoria encontrada' : 'Aguardando conteúdos...'}
-          </h3>
-          <p className="text-gray-500 mt-2">
-            {search ? 'Tente buscar por outros termos.' : 'Em breve teremos novos materiais para você nesta seção.'}
-          </p>
+          <h3 className="text-lg font-medium text-gray-900">Nenhuma categoria encontrada</h3>
+          <p className="text-gray-500">Tente buscar por outros termos.</p>
         </div>
       )}
     </div>
   );
 };
 
-const CategoryDetail = ({ categories, contents, favorites, isAdmin }: { categories: Category[], contents: Content[], favorites: Favorite[], isAdmin: boolean }) => {
+const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { categories: Category[], contents: Content[], favorites: Favorite[], user: User | null, isAdmin: boolean }) => {
   const { id } = useParams();
   const category = categories.find(c => c.id === id);
   const categoryContents = contents.filter(c => c.categoryId === id);
   const [search, setSearch] = useState('');
 
   const filteredContents = categoryContents.filter(c => {
-    const title = c.title || '';
-    const desc = c.description || '';
-    const matchesSearch = title.toLowerCase().includes(search.toLowerCase()) || 
-                         desc.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
+                         c.description.toLowerCase().includes(search.toLowerCase());
     const isVisible = isAdmin || c.status !== 'hidden';
     return matchesSearch && isVisible;
   });
 
-  const isFavorite = (contentId: string) => false;
+  const isFavorite = (contentId: string) => favorites.some(f => f.contentId === contentId);
 
   const toggleFavorite = async (contentId: string) => {
-    alert("Função de favoritos desativada temporariamente.");
+    if (!user) return alert("Faça login para favoritar conteúdos");
+    
+    const existing = favorites.find(f => f.contentId === contentId && f.userId === user.uid);
+    if (existing) {
+      await deleteDoc(doc(db, 'favorites', existing.id));
+    } else {
+      await addDoc(collection(db, 'favorites'), {
+        userId: user.uid,
+        contentId: contentId
+      });
+    }
   };
 
   if (!category) return <div className="p-10 text-center">Categoria não encontrada</div>;
@@ -427,17 +415,17 @@ const CategoryDetail = ({ categories, contents, favorites, isAdmin }: { categori
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center space-x-2">
-                <h3 className="text-lg font-bold text-gray-900 truncate">{content.title || 'Sem título'}</h3>
-                {((content.accessLevel || 'public') === 'private') && (
+                <h3 className="text-lg font-bold text-gray-900 truncate">{content.title}</h3>
+                {content.accessLevel === 'private' && (
                   <span className={cn(
                     "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase",
-                    isAdmin ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
+                    user ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
                   )}>
-                    {isAdmin ? 'Acesso Admin' : 'Exclusivo'}
+                    {user ? 'Acesso Liberado' : 'Premium'}
                   </span>
                 )}
               </div>
-              <p className="text-gray-500 text-sm line-clamp-1">{content.description || 'Nenhuma descrição disponível'}</p>
+              <p className="text-gray-500 text-sm line-clamp-1">{content.description}</p>
             </div>
             <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
               <button 
@@ -450,22 +438,22 @@ const CategoryDetail = ({ categories, contents, favorites, isAdmin }: { categori
                 <Star className={cn("w-5 h-5", isFavorite(content.id) && "fill-current")} />
               </button>
               <Link 
-                to={(content.accessLevel || 'public') === 'private' && !isAdmin ? '#' : `/content/${content.id}`}
+                to={content.accessLevel === 'private' && !user ? '#' : `/content/${content.id}`}
                 onClick={(e) => {
-                  if ((content.accessLevel || 'public') === 'private' && !isAdmin) {
+                  if (content.accessLevel === 'private' && !user) {
                     e.preventDefault();
-                    alert("Este conteúdo é exclusivo para o administrador.");
+                    alert("Acesso exclusivo para membros. Por favor, faça login.");
                   }
                 }}
                 className={cn(
                   "px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center",
-                  content.accessLevel === 'private' && !isAdmin 
+                  content.accessLevel === 'private' && !user 
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
                     : "bg-gray-900 text-white hover:bg-indigo-600"
                 )}
               >
-                {content.accessLevel === 'private' && !isAdmin ? <Lock className="w-4 h-4 mr-2" /> : null}
-                {content.accessLevel === 'private' && !isAdmin ? 'Bloqueado' : 'Abrir conteúdo'}
+                {content.accessLevel === 'private' && !user ? <Lock className="w-4 h-4 mr-2" /> : null}
+                {content.accessLevel === 'private' && !user ? 'Bloqueado' : 'Abrir conteúdo'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Link>
             </div>
@@ -669,8 +657,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   const testConnection = async () => {
     setDebugStatus("Testando...");
     try {
-      const { data, error } = await supabase.from('categories').select('*').limit(1);
-      if (error) throw error;
+      const q = query(collection(db, 'categories'), limit(1));
+      await getDocs(q);
       setDebugStatus("Conexão com Banco de Dados: OK!");
     } catch (error: any) {
       console.error("Debug connection error:", error);
@@ -684,67 +672,53 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
         <Settings className="w-12 h-12 text-gray-300 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-gray-900 mb-2">Acesso Restrito</h2>
         <p className="text-gray-500 mb-2">Você precisa estar logado como administrador para acessar esta página.</p>
-        <p className="text-sm text-red-500 mb-6 font-medium">Esta área é restrita para o administrador do MindFlow.</p>
+        {auth.currentUser ? (
+          <div className="mb-6 p-3 bg-amber-50 rounded-xl border border-amber-100">
+            <p className="text-xs text-amber-700">Logado como:</p>
+            <p className="text-sm font-bold text-amber-900">{auth.currentUser.email}</p>
+            <p className="text-[10px] text-amber-600 mt-1">Este e-mail não tem permissão de administrador.</p>
+          </div>
+        ) : (
+          <p className="text-sm text-red-500 mb-6 font-medium">Você não está logado.</p>
+        )}
         <Link to="/" className="text-indigo-600 font-bold hover:underline">Voltar para o Início</Link>
       </div>
     );
   }
 
-  const [saving, setSaving] = useState(false);
-
   const handleSaveCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!catForm.name || saving) return;
+    if (!catForm.name) return;
     
-    setSaving(true);
-    try {
-      if (editingCatId) {
-        const { error } = await supabase.from('categories').update(catForm).eq('id', editingCatId);
-        if (error) throw error;
-        setEditingCatId(null);
-      } else {
-        const { error } = await supabase.from('categories').insert({ ...catForm, order: categories.length });
-        if (error) throw error;
-      }
-      setCatForm({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' });
-    } catch (error) {
-      console.error("Error saving category:", error);
-      alert("Erro ao salvar categoria. Tente novamente.");
-    } finally {
-      setSaving(false);
+    if (editingCatId) {
+      await updateDoc(doc(db, 'categories', editingCatId), catForm);
+      setEditingCatId(null);
+    } else {
+      await addDoc(collection(db, 'categories'), { ...catForm, order: categories.length });
     }
+    setCatForm({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' });
   };
 
   const handleSaveContent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contForm.categoryId || !contForm.title || !contForm.url || saving) return;
+    if (!contForm.categoryId || !contForm.title || !contForm.url) return;
     
-    setSaving(true);
-    try {
-      if (editingContId) {
-        const { error } = await supabase.from('contents').update(contForm).eq('id', editingContId);
-        if (error) throw error;
-        setEditingContId(null);
-      } else {
-        const { error } = await supabase.from('contents').insert({ ...contForm, createdAt: new Date().toISOString() });
-        if (error) throw error;
-      }
-      setContForm({ 
-        categoryId: '', 
-        title: '', 
-        description: '', 
-        type: ContentType.VIDEO, 
-        url: '', 
-        status: 'free',
-        links: [],
-        accessLevel: 'public'
-      });
-    } catch (error) {
-      console.error("Error saving content:", error);
-      alert("Erro ao salvar conteúdo. Tente novamente.");
-    } finally {
-      setSaving(false);
+    if (editingContId) {
+      await updateDoc(doc(db, 'contents', editingContId), contForm);
+      setEditingContId(null);
+    } else {
+      await addDoc(collection(db, 'contents'), { ...contForm, createdAt: new Date().toISOString() });
     }
+    setContForm({ 
+      categoryId: '', 
+      title: '', 
+      description: '', 
+      type: ContentType.VIDEO, 
+      url: '', 
+      status: 'free',
+      links: [],
+      accessLevel: 'public'
+    });
   };
 
   const startEditCategory = (cat: Category) => {
@@ -773,57 +747,34 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
   };
 
   const toggleCategoryVisibility = async (id: string, current: boolean) => {
-    try {
-      const { error } = await supabase.from('categories').update({ isVisible: !current }).eq('id', id);
-      if (error) throw error;
-    } catch (error) {
-      console.error("Error toggling category visibility:", error);
-    }
+    await updateDoc(doc(db, 'categories', id), { isVisible: !current });
   };
 
   const toggleContentStatus = async (id: string, current: 'free' | 'hidden') => {
-    try {
-      const { error } = await supabase.from('contents').update({ status: current === 'free' ? 'hidden' : 'free' }).eq('id', id);
-      if (error) throw error;
-    } catch (error) {
-      console.error("Error toggling content status:", error);
-    }
+    await updateDoc(doc(db, 'contents', id), { status: current === 'free' ? 'hidden' : 'free' });
   };
 
   const handleDelete = async (coll: string, id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir?')) {
-      try {
-        const { error } = await supabase.from(coll).delete().eq('id', id);
-        if (error) throw error;
-      } catch (error) {
-        console.error("Error deleting:", error);
-        alert("Erro ao excluir. Tente novamente.");
-      }
+    if (confirm('Tem certeza que deseja excluir?')) {
+      await deleteDoc(doc(db, coll, id));
     }
   };
 
   const handleSeedData = async () => {
-    if (categories.length > 0 || saving) return;
+    if (categories.length > 0) return;
     
-    setSaving(true);
-    try {
-      const initialCategories = [
-        { name: 'Desenvolvimento Pessoal', description: 'Cursos para melhorar sua produtividade, mentalidade e hábitos.', order: 0, isVisible: true, accessLevel: 'public' },
-        { name: 'Estudos Bíblicos', description: 'Aprofunde seu conhecimento nas escrituras com materiais exclusivos.', order: 1, isVisible: true, accessLevel: 'public' },
-        { name: 'Finanças', description: 'Aprenda a gerir seu dinheiro, investir e alcançar a liberdade financeira.', order: 2, isVisible: true, accessLevel: 'public' },
-        { name: 'Liderança', description: 'Desenvolva habilidades de gestão e influência para liderar equipes.', order: 3, isVisible: true, accessLevel: 'public' },
-        { name: 'Cursos Técnicos', description: 'Aprenda novas profissões e habilidades práticas.', order: 4, isVisible: true, accessLevel: 'public' }
-      ];
+    const initialCategories = [
+      { name: 'Desenvolvimento Pessoal', description: 'Cursos para melhorar sua produtividade, mentalidade e hábitos.', order: 0, isVisible: true },
+      { name: 'Estudos Bíblicos', description: 'Aprofunde seu conhecimento nas escrituras com materiais exclusivos.', order: 1, isVisible: true },
+      { name: 'Finanças', description: 'Aprenda a gerir seu dinheiro, investir e alcançar a liberdade financeira.', order: 2, isVisible: true },
+      { name: 'Liderança', description: 'Desenvolva habilidades de gestão e influência para liderar equipes.', order: 3, isVisible: true },
+      { name: 'Cursos Técnicos', description: 'Aprenda novas profissões e habilidades práticas.', order: 4, isVisible: true }
+    ];
 
-      const { error } = await supabase.from('categories').insert(initialCategories);
-      if (error) throw error;
-      alert('Categorias iniciais adicionadas!');
-    } catch (error) {
-      console.error("Error seeding data:", error);
-      alert("Erro ao adicionar categorias. Tente novamente.");
-    } finally {
-      setSaving(false);
+    for (const cat of initialCategories) {
+      await addDoc(collection(db, 'categories'), cat);
     }
+    alert('Categorias iniciais adicionadas!');
   };
 
   return (
@@ -832,12 +783,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
         <h1 className="text-3xl font-bold text-gray-900">Painel Administrativo</h1>
         <div className="flex items-center space-x-4">
           {categories.length === 0 && (
-            <button 
-              onClick={handleSeedData} 
-              disabled={saving}
-              className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Semeando...' : 'Semear Dados Iniciais'}
+            <button onClick={handleSeedData} className="text-xs bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 transition-colors">
+              Semear Dados Iniciais
             </button>
           )}
           <div className="flex bg-gray-100 p-1 rounded-xl">
@@ -917,15 +864,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   </label>
                 </div>
                 <div className="flex space-x-2">
-                  <button 
-                    type="submit" 
-                    disabled={saving}
-                    className={cn(
-                      "flex-1 py-2 rounded-xl font-bold transition-colors disabled:opacity-50", 
-                      editingCatId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                    )}
-                  >
-                    {saving ? 'Processando...' : (editingCatId ? 'Salvar Alterações' : 'Criar Categoria')}
+                  <button type="submit" className={cn("flex-1 py-2 rounded-xl font-bold transition-colors", editingCatId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white")}>
+                    {editingCatId ? 'Salvar Alterações' : 'Criar Categoria'}
                   </button>
                   {editingCatId && (
                     <button 
@@ -1149,15 +1089,8 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
                   </select>
                 </div>
                 <div className="flex space-x-2">
-                  <button 
-                    type="submit" 
-                    disabled={saving}
-                    className={cn(
-                      "flex-1 py-2 rounded-xl font-bold transition-colors disabled:opacity-50", 
-                      editingContId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white"
-                    )}
-                  >
-                    {saving ? 'Processando...' : (editingContId ? 'Salvar Alterações' : 'Adicionar Conteúdo')}
+                  <button type="submit" className={cn("flex-1 py-2 rounded-xl font-bold transition-colors", editingContId ? "bg-amber-600 hover:bg-amber-700 text-white" : "bg-indigo-600 hover:bg-indigo-700 text-white")}>
+                    {editingContId ? 'Salvar Alterações' : 'Adicionar Conteúdo'}
                   </button>
                   {editingContId && (
                     <button 
@@ -1243,491 +1176,81 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
 // --- Main App ---
 
 export default function App() {
-  const [isAdmin, setIsAdmin] = useState(() => {
-    return sessionStorage.getItem('admin_auth') === 'true';
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [contents, setContents] = useState<Content[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
-  const [dbError, setDbError] = useState<{ message: string, code: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminPassword, setAdminPassword] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
 
-  const handleAdminVerify = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPassword === '847109') {
-      setIsAdmin(true);
-      sessionStorage.setItem('admin_auth', 'true');
-      setShowAdminLogin(false);
-      setAdminPassword('');
-      setLoginError(null);
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setIsAdmin(u?.email === 'edsonfinanceiro2017@gmail.com');
+    });
+
+    return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    // Categories Listener - Broad query is now allowed by rules to ensure UI stability
+    // We sort and filter isVisible in memory to avoid composite index errors
+    const qCats = query(collection(db, 'categories'));
+
+    const unsubCats = onSnapshot(qCats, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
+      setCategories(data.sort((a, b) => (a.order || 0) - (b.order || 0)));
+    }, (error) => {
+      console.error("Error fetching categories:", error);
+    });
+
+    // Contents Listener - Query must still match security rules
+    let qConts;
+    if (isAdmin || user) {
+      // Logged in: Can read all (security rules handle private content)
+      qConts = query(collection(db, 'contents'));
     } else {
-      setLoginError('Senha incorreta!');
+      // Logged out: ONLY public contents allowed by security rules
+      qConts = query(collection(db, 'contents'), where('accessLevel', '==', 'public'));
     }
-  };
 
-  const handleLogout = () => {
-    setIsAdmin(false);
-    sessionStorage.removeItem('admin_auth');
-  };
-
-  const handleLoginPopup = () => {
-    setShowAdminLogin(true);
-    setLoginError(null);
-  };
-
-  const fetchCategories = async () => {
-    if (!isSupabaseConfigured) return null;
-    try {
-      const { data, error } = await supabase.from('categories').select('*').order('order', { ascending: true });
-      if (error) {
-        console.error("Erro ao buscar categorias:", error);
-        return error;
-      }
-      setCategories(data || []);
-      return null;
-    } catch (err: any) {
-      return err;
-    }
-  };
-
-  const fetchContents = async () => {
-    if (!isSupabaseConfigured) return null;
-    try {
-      let query = supabase.from('contents').select('*');
-      if (!isAdmin) {
-        query = query.eq('accessLevel', 'public');
-      }
-      const { data, error } = await query.order('createdAt', { ascending: false });
-      if (error) {
-        console.error("Erro ao buscar conteúdos:", error);
-        return error;
-      }
-      setContents(data || []);
-      return null;
-    } catch (err: any) {
-      return err;
-    }
-  };
-
-  const fetchFavorites = async () => {
-    if (!isSupabaseConfigured) return;
-    try {
-      // Favorites are disabled since we don't have user accounts anymore
-      setFavorites([]);
-    } catch (err) {
-      console.error("Fetch favorites unexpected error:", err);
-    }
-  };
-
-  useEffect(() => {
-    console.log("MindFlow App Mount");
-  }, []);
-
-  const [showTroubleshoot, setShowTroubleshoot] = useState(false);
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-
-  const addLog = (msg: string) => {
-    setDebugLogs(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${msg}`]);
-  };
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    addLog("Sistema simplificado: Acesso via senha 847109.");
-  }, []);
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    let isMounted = true;
-
-    const init = async () => {
-      try {
-        setLoading(true);
-        addLog("Buscando categorias e conteúdos...");
-        
-        // Use a timeout for the entire init process
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("A conexão com Supabase expirou (Timeout)")), 15000)
-        );
-
-        const fetchPromise = Promise.all([fetchCategories(), fetchContents()]);
-        
-        const [catError, contError] = await Promise.race([fetchPromise, timeoutPromise]) as [any, any];
-        
-        if (!isMounted) return;
-
-        const firstError = catError || contError;
-        if (firstError) {
-          addLog(`Erro detectado: ${firstError.message}`);
-          setDbError({ message: firstError.message, code: firstError.code });
-        } else {
-          addLog("Dados carregados com sucesso.");
-          setDbError(null);
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          addLog(`Erro fatal: ${err.message}`);
-          setDbError({ message: err.message, code: err.code || 'INIT_ERROR' });
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-    init();
-
-    const channel = supabase.channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, fetchCategories)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contents' }, fetchContents)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'favorites' }, fetchFavorites)
-      .subscribe((status) => {
-        addLog(`Canal Realtime: ${status}`);
-        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
-          console.warn("Realtime channel issue:", status);
-        }
-      });
+    const unsubConts = onSnapshot(qConts, (snap) => {
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Content));
+      // Sort in memory by date descending
+      setContents(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    }, (error) => {
+      console.error("Error fetching contents:", error);
+    });
 
     return () => {
-      isMounted = false;
-      supabase.removeChannel(channel);
+      unsubCats();
+      unsubConts();
     };
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   useEffect(() => {
-    fetchFavorites();
-  }, []);
-
-  useEffect(() => {
-    let timer: any;
-    if (loading && isSupabaseConfigured) {
-      timer = setTimeout(() => {
-        setShowTroubleshoot(true);
-      }, 3000); // Trigger troubleshooting after 3s
+    if (user) {
+      const unsubFavs = onSnapshot(query(collection(db, 'favorites'), where('userId', '==', user.uid)), (snap) => {
+        setFavorites(snap.docs.map(d => ({ id: d.id, ...d.data() } as Favorite)));
+      });
+      return () => unsubFavs();
     } else {
-      setShowTroubleshoot(false);
+      setFavorites([]);
     }
+  }, [user]);
+
+  useEffect(() => {
+    // Simulate loading
+    const timer = setTimeout(() => setLoading(false), 1000);
     return () => clearTimeout(timer);
-  }, [loading, isSupabaseConfigured]);
-
-  const isUrlValidFormat = isSupabaseConfigured && !import.meta.env.VITE_SUPABASE_URL?.includes('db.');
-
-  if (!isSupabaseConfigured) {
-    const rawUrl = import.meta.env.VITE_SUPABASE_URL;
-    const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    const hasUrl = !!rawUrl && rawUrl !== 'your-supabase-url' && rawUrl.length > 5;
-    const hasKey = !!rawKey && rawKey !== 'your-supabase-anon-key' && rawKey.length > 10;
-    const isDbHost = rawUrl?.includes('db.');
-    
-    // Check if the URL has a protocol
-    const needsProtocol = hasUrl && !rawUrl.includes('://');
-
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 text-center font-sans">
-        <div className="max-w-md w-full bg-white p-8 rounded-[2.5rem] shadow-2xl border border-gray-100/50 backdrop-blur-xl">
-          <div className="w-24 h-24 bg-gradient-to-tr from-indigo-50 to-blue-50 rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-inner ring-4 ring-white">
-            <Settings className="w-12 h-12 text-indigo-500 animate-spin" style={{ animationDuration: '10s' }} />
-          </div>
-          
-          <h1 className="text-3xl font-black text-gray-900 mb-3 tracking-tight">Quase lá!</h1>
-          <p className="text-gray-500 mb-8 text-sm leading-relaxed px-2 font-medium">
-            Sua conexão com o banco de dados Supabase precisa ser configurada no painel principal.
-          </p>
-
-          <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 text-left mb-8 space-y-4">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-2 flex items-center">
-              <Activity className="w-3.5 h-3.5 mr-2 text-indigo-400" /> Diagnóstico de Conexão
-            </p>
-            
-            <div className="space-y-4">
-              <div className="flex items-start">
-                <div className={cn(
-                  "w-6 h-6 rounded-xl flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold shadow-sm transition-all",
-                  hasUrl ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
-                )}>
-                  {hasUrl ? <Check className="w-3.5 h-3.5" /> : "1"}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-gray-800">VITE_SUPABASE_URL</p>
-                  {hasUrl ? (
-                    <div className="mt-1 space-y-1">
-                      <p className="text-emerald-600 text-xs font-semibold flex items-center">
-                        <CheckCircle2 className="w-3 h-3 mr-1" /> Valor detectado
-                      </p>
-                      {isDbHost && (
-                        <div className="bg-red-50 text-red-600 p-3 rounded-xl border border-red-100 mt-2">
-                          <p className="text-[10px] font-bold uppercase mb-1">Erro de Formato</p>
-                          <p className="text-[11px] leading-tight font-medium">Você usou o host do banco de dados (<code className="bg-red-100 px-1 rounded">db.xyz...</code>). Use o <b>Project URL</b> da API.</p>
-                        </div>
-                      )}
-                      {needsProtocol && (
-                        <div className="bg-amber-50 text-amber-700 p-3 rounded-xl border border-amber-100 mt-2">
-                          <p className="text-[10px] font-bold uppercase mb-1">Aviso</p>
-                          <p className="text-[11px] leading-tight font-medium">Faltou o <code className="bg-amber-100 px-1 rounded">https://</code>, mas tentaremos conectar assim mesmo.</p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 text-xs mt-1 italic font-medium">Configuração pendente no menu Settings</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-start">
-                <div className={cn(
-                  "w-6 h-6 rounded-xl flex items-center justify-center mr-3 shrink-0 text-[10px] font-bold shadow-sm transition-all",
-                  hasKey ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-400"
-                )}>
-                  {hasKey ? <Check className="w-3.5 h-3.5" /> : "2"}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-gray-800">VITE_SUPABASE_ANON_KEY</p>
-                  {hasKey ? (
-                    <p className="text-emerald-600 text-xs font-semibold mt-1 flex items-center text-ellipsis overflow-hidden">
-                      <CheckCircle2 className="w-3 h-3 mr-1 shrink-0" /> Chave pública detectada
-                    </p>
-                  ) : (
-                    <p className="text-slate-400 text-xs mt-1 italic font-medium">Configuração pendente no menu Settings</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95 flex items-center justify-center group"
-            >
-              <span>Recarregar e Testar</span>
-              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </button>
-            
-            <a 
-              href="https://supabase.com/dashboard" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="block w-full bg-slate-100 text-slate-600 py-3 rounded-2xl font-bold text-xs hover:bg-slate-200 transition-all active:scale-95"
-            >
-              Abrir Console Supabase
-            </a>
-          </div>
-          
-          <div className="mt-8 pt-6 border-t border-gray-50">
-            <p className="text-[10px] text-gray-300 font-medium leading-relaxed max-w-[200px] mx-auto italic">
-              Dica: Após salvar no menu Settings, a página pode levar alguns segundos para aplicar as mudanças.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (dbError && dbError.code !== '42P01') {
-    const isSecretKeyError = dbError.message?.includes('secret API key');
-    const isTimeoutError = dbError.message?.includes('Timeout');
-    const isResetForced = dbError.code === 'RESET_CONFIG';
-    
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center border border-red-100">
-          <div className={cn(
-            "w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6",
-            (isResetForced || isTimeoutError) ? "bg-amber-50 text-amber-600" : "bg-red-50 text-red-600"
-          )}>
-            {isResetForced ? <Settings className="w-8 h-8" /> : isTimeoutError ? <AlertTriangle className="w-8 h-8" /> : <X className="w-8 h-8" />}
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">
-            {isResetForced ? "Revisar Configuração" : isTimeoutError ? "Tempo de Conexão Esgotado" : "Erro na Conexão"}
-          </h1>
-          <p className="text-gray-600 text-sm mb-6 leading-relaxed">
-            {isResetForced 
-              ? "Você escolheu revisar as configurações do Supabase."
-              : isTimeoutError
-                ? "Não conseguimos conectar ao seu servidor Supabase após 15 segundos."
-                : isSecretKeyError 
-                  ? "Você usou uma Chave de API Secreta (service_role) em vez da Chave Anon (pública)."
-                  : "Houve um problema ao carregar os dados do banco."}
-          </p>
-
-          {(isSecretKeyError || isResetForced || isTimeoutError) ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left mb-6">
-              <p className="text-xs text-amber-800 font-bold mb-2">Checklist de Solução:</p>
-              <ul className="text-xs text-amber-900 space-y-2 list-disc list-inside">
-                <li>Verifique se o projeto não está <b>Pausado</b> no Supabase.</li>
-                <li>Confirme que a URL é: <code className="bg-amber-100 px-1 rounded">https://ID.supabase.co</code></li>
-                <li>Nunca use o host de banco <code className="bg-amber-100 px-1 rounded">db.ID...</code> ou a string <code className="bg-amber-100 px-1 rounded">postgresql://</code>.</li>
-                <li>Use a chave <b>anon public</b>, nunca a <b>service_role</b>.</li>
-              </ul>
-            </div>
-          ) : (
-            <div className="bg-gray-50 rounded-xl p-4 text-left mb-6 font-mono text-[10px] text-gray-500 overflow-auto max-h-32">
-              <p className="font-bold text-gray-700 mb-1">Detalhes do erro:</p>
-              <p>Code: {dbError.code || 'N/A'}</p>
-              <p>Message: {dbError.message}</p>
-            </div>
-          )}
-
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
-          >
-            {isResetForced || isSecretKeyError ? "Recarregar após configurar" : "Tentar Novamente"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (dbError?.code === '42P01') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-3xl w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 italic">
-          <div className="bg-red-600 p-6 text-white flex items-center space-x-4">
-            <div className="bg-white/20 p-3 rounded-2xl">
-              <Plus className="w-8 h-8 text-white rotate-45" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">Configuração do Banco de Dados</h1>
-              <p className="text-red-100 text-sm">As tabelas necessárias não foram encontradas no Supabase.</p>
-            </div>
-          </div>
-          
-          <div className="p-8">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Como resolver (Passo a Passo):</h2>
-            <ol className="space-y-4 text-sm text-gray-600">
-              <li className="flex items-start">
-                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">1</span>
-                <span>Acesse o seu dashboard no <a href="https://supabase.com/dashboard" target="_blank" className="text-indigo-600 font-bold underline">Supabase</a>.</span>
-              </li>
-              <li className="flex items-start">
-                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">2</span>
-                <span>Clique em <b>"SQL Editor"</b> no menu lateral esquerdo.</span>
-              </li>
-              <li className="flex items-start">
-                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">3</span>
-                <span>Clique em <b>"+ New query"</b>.</span>
-              </li>
-              <li className="flex items-start">
-                <span className="bg-indigo-100 text-indigo-600 w-6 h-6 rounded-full flex items-center justify-center mr-3 shrink-0 font-bold">4</span>
-                <span>Copie o código abaixo e clique em <b>"Run"</b>:</span>
-              </li>
-            </ol>
-
-            <div className="mt-6 bg-gray-900 rounded-2xl p-4 relative group">
-              <pre className="text-indigo-400 text-[10px] sm:text-xs overflow-x-auto max-h-60 custom-scrollbar leading-relaxed">
-{`/* 1. Criar Tabela de Categorias */
-create table categories (
-  id uuid default gen_random_uuid() primary key,
-  name text not null,
-  description text,
-  "imageUrl" text,
-  "order" integer default 0,
-  "isVisible" boolean default true,
-  "accessLevel" text default 'public',
-  "createdAt" timestamp with time zone default now()
-);
-
-/* 2. Criar Tabela de Conteúdos */
-create table contents (
-  id uuid default gen_random_uuid() primary key,
-  "categoryId" uuid references categories(id) on delete cascade,
-  title text not null,
-  description text,
-  type text not null,
-  url text not null,
-  status text default 'free',
-  "accessLevel" text default 'public',
-  links jsonb default '[]'::jsonb,
-  "createdAt" timestamp with time zone default now()
-);
-
-/* 3. Criar Tabela de Favoritos */
-create table favorites (
-  id uuid default gen_random_uuid() primary key,
-  "userId" uuid not null,
-  "contentId" uuid references contents(id) on delete cascade,
-  "createdAt" timestamp with time zone default now()
-);
-
-/* 4. Habilitar Segurança (RLS) */
-alter table categories enable row level security;
-alter table contents enable row level security;
-alter table favorites enable row level security;
-
-/* 5. Criar Políticas de Acesso */
-create policy "Público: Ver categorias" on categories for select using (true);
-create policy "Admin: Tudo em categorias" on categories using (auth.jwt() ->> 'email' = 'edsonfinanceiro2017@gmail.com');
-
-create policy "Público: Ver conteúdos livres" on contents for select using ("accessLevel" = 'public');
-create policy "Membros: Ver conteúdos exclusivos" on contents for select using (auth.role() = 'authenticated');
-create policy "Admin: Tudo em conteúdos" on contents using (auth.jwt() ->> 'email' = 'edsonfinanceiro2017@gmail.com');
-
-create policy "Usuários: Gerenciar próprios favoritos" on favorites using (auth.uid() = "userId");`}
-              </pre>
-              <button 
-                onClick={() => {
-                  const el = document.querySelector('pre');
-                  if (el) {
-                    navigator.clipboard.writeText(el.innerText);
-                    alert("Código copiado! Agora cole no SQL Editor do Supabase.");
-                  }
-                }}
-                className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
-              >
-                Copiar SQL
-              </button>
-            </div>
-            
-            <p className="mt-6 text-[10px] text-gray-400 text-center">
-              Após rodar o script e ver a mensagem "Success", atualize esta página.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-        <div className="flex flex-col items-center max-w-sm w-full text-center">
-          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-gray-500 font-medium whitespace-nowrap">Carregando MindFlow...</p>
-          
-          {showTroubleshoot && (
-            <div className="mt-10 p-6 bg-white rounded-3xl shadow-xl border border-gray-100 animate-in fade-in slide-in-from-bottom duration-700">
-              <p className="text-sm text-gray-600 mb-4 font-medium">O carregamento está demorando mais do que o esperado.</p>
-              
-              {debugLogs.length > 0 && (
-                <div className="mb-6 bg-gray-50 rounded-xl p-3 text-left font-mono text-[9px] text-gray-400 border border-gray-100">
-                  <p className="font-bold text-gray-500 mb-1 uppercase tracking-wider">Status do Sistema:</p>
-                  {debugLogs.map((log, i) => (
-                    <div key={i} className="border-b border-gray-100 py-1 last:border-0">{log}</div>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex flex-col space-y-3">
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
-                >
-                  Recarregar Página
-                </button>
-                <button 
-                  onClick={() => {
-                    // Forcefully clear keys info to show config screen
-                    setDbError({ message: "Reset forçado pelo usuário.", code: "RESET_CONFIG" });
-                    setLoading(false);
-                  }}
-                  className="bg-amber-100 text-amber-700 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-amber-200 transition-all"
-                >
-                  Revisar Configurações
-                </button>
-              </div>
-            </div>
-          )}
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-gray-500 font-medium animate-pulse">Carregando MindFlow...</p>
         </div>
       </div>
     );
@@ -1736,66 +1259,12 @@ create policy "Usuários: Gerenciar próprios favoritos" on favorites using (aut
   return (
     <Router>
       <div className="min-h-screen bg-gray-50 font-sans text-gray-900 selection:bg-indigo-100 selection:text-indigo-900">
-        <Navbar isAdmin={isAdmin} onAdminAuth={handleLoginPopup} onLogout={handleLogout} />
-
-        {/* Admin Login Modal */}
-        {showAdminLogin && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-sm w-full relative border border-gray-100"
-            >
-              <button 
-                onClick={() => setShowAdminLogin(false)}
-                className="absolute top-6 right-6 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-
-              <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
-                <Lock className="w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">Acesso Admin</h3>
-              <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-                Insira a senha de administrador para acessar o painel de gestão.
-              </p>
-              
-              <form onSubmit={handleAdminVerify} className="space-y-4">
-                <div className="relative">
-                  <input 
-                    type="password"
-                    required
-                    autoFocus
-                    placeholder="Senha de acesso"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 px-5 py-4 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all text-gray-900 font-medium text-center tracking-[0.5em]"
-                  />
-                </div>
-                
-                {loginError && (
-                  <div className="flex items-center space-x-2 text-xs text-red-600 bg-red-50 p-3 rounded-xl border border-red-100">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span>{loginError}</span>
-                  </div>
-                )}
-
-                <button 
-                  type="submit"
-                  className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-100"
-                >
-                  Entrar no Painel
-                </button>
-              </form>
-            </motion.div>
-          </div>
-        )}
+        <Navbar user={user} isAdmin={isAdmin} />
         
         <main className="pb-20">
           <Routes>
-            <Route path="/" element={<Home categories={categories} isAdmin={isAdmin} />} />
-            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} isAdmin={isAdmin} />} />
+            <Route path="/" element={<Home categories={categories} user={user} isAdmin={isAdmin} />} />
+            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} isAdmin={isAdmin} />} />
             <Route path="/content/:id" element={<ContentDetail contents={contents} />} />
             <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} />} />
             <Route path="*" element={<Navigate to="/" />} />
