@@ -48,7 +48,7 @@ service cloud.firestore {
 
     // Contents: Publicly readable if public or authenticated for private, Admin writable
     match /contents/{contentId} {
-      allow read: if (resource.data.accessLevel == 'public' || (resource.data.accessLevel == 'private' && isAuthenticated())) || isAdmin();
+      allow read: if (resource.data.get('accessLevel', 'public') == 'public' || (resource.data.get('accessLevel', 'public') == 'private' && isAuthenticated())) || isAdmin();
       allow create, update, delete: if isAdmin() && isValidContent(request.resource.data);
     }
 
