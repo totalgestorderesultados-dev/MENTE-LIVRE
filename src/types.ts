@@ -42,3 +42,11 @@ export interface UserProfile {
   email: string;
   isAdmin: boolean;
 }
+
+export interface AccessCode {
+  id: string; // The 9 digit code itself or doc ID
+  code: string;
+  label?: string;
+  createdAt: string;
+  isActive: boolean;
+}

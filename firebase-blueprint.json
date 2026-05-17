@@ -104,6 +104,30 @@
         }
       },
       "required": ["userId", "contentId"]
+    },
+    "AccessCode": {
+      "title": "Access Code",
+      "description": "A 9-digit code to authorize access to exclusive content",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "The 9-digit code"
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional label or user name associated with the code"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether the code is active"
+        }
+      },
+      "required": ["code"]
     }
   },
   "firestore": {
@@ -118,6 +142,10 @@
     "/favorites/{favoriteId}": {
       "schema": "Favorite",
       "description": "Collection of user favorites"
+    },
+    "/accessCodes/{codeId}": {
+      "schema": "AccessCode",
+      "description": "Collection of authorized access codes"
     }
   }
 }

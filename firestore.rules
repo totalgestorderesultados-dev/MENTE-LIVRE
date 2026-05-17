@@ -46,10 +46,16 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin() && isValidCategory(request.resource.data);
     }
 
-    // Contents: Publicly readable if public or authenticated for private, Admin writable
+    // Contents: Publicly readable if public, Admin writable, or has valid auth
     match /contents/{contentId} {
-      allow read: if (resource.data.get('accessLevel', 'public') == 'public' || (resource.data.get('accessLevel', 'public') == 'private' && isAuthenticated())) || isAdmin();
+      allow read: if (resource.data.get('accessLevel', 'public') == 'public') || isAuthenticated() || isAdmin();
       allow create, update, delete: if isAdmin() && isValidContent(request.resource.data);
+    }
+
+    // Access Codes: Admin managed, public can check existence of ONE code
+    match /accessCodes/{codeId} {
+      allow get: if true;
+      allow list, write: if isAdmin();
     }
 
     // Favorites: Owner readable/writable

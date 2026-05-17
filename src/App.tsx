@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, User, setPersistence, browserLocalPersistence } from 'firebase/auth';
-import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc, getDocs, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, addDoc, deleteDoc, doc, updateDoc, getDocs, limit, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { Category, Content, ContentLink, ContentType, Favorite } from './types';
+import { Category, Content, ContentLink, ContentType, Favorite, AccessCode } from './types';
 import { LogIn, LogOut, Settings, Home as HomeIcon, BookOpen, Video, FileText, Star, Search, Plus, Trash2, ChevronRight, Menu, X, PlayCircle, Edit2, Lock, Download } from 'lucide-react';
 import { cn, getYouTubeId, getYouTubePlaylistId, getGoogleDriveEmbedUrl } from './utils';
 
@@ -199,7 +199,7 @@ const Navbar = ({ user, isAdmin }: { user: User | null, isAdmin: boolean }) => {
 
 // --- Pages ---
 
-const Home = ({ categories, user, isAdmin }: { categories: Category[], user: User | null, isAdmin: boolean }) => {
+const Home = ({ categories, user, isAdmin, onVoucherRequest }: { categories: Category[], user: User | null, isAdmin: boolean, onVoucherRequest: () => void }) => {
   const [search, setSearch] = useState('');
   
   const filteredCategories = categories.filter(c => {
@@ -213,7 +213,7 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
 
   // Auto-switch to private if user logs in and we are on public tab
   useEffect(() => {
-    if (user && activeSegment === 'public') {
+    if ((user || localStorage.getItem('mindflow_voucher')) && activeSegment === 'public') {
       setActiveSegment('private');
     }
   }, [user]);
@@ -221,6 +221,8 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
   const displayedCategories = filteredCategories.filter(c => {
     return c.accessLevel === activeSegment;
   });
+
+  const isVoucherActive = !!localStorage.getItem('mindflow_voucher');
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -243,7 +245,7 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
           <div className="inline-flex bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm">
             {[
               { id: 'public', label: 'Gratuito' },
-              { id: 'private', label: activeSegment === 'private' && !user ? 'Realizar Cadastro' : 'Exclusivo' }
+              { id: 'private', label: activeSegment === 'private' && !user && !isVoucherActive ? 'Acessar Exclusivo' : 'Exclusivo' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -255,9 +257,9 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
                     : "text-gray-500 hover:text-indigo-600 hover:bg-indigo-50"
                 )}
               >
-                {tab.id === 'private' && activeSegment === 'private' && !user ? (
+                {tab.id === 'private' && activeSegment === 'private' && !user && !isVoucherActive ? (
                    <div className="flex items-center">
-                     <LogIn className="w-4 h-4 mr-2" />
+                     <Lock className="w-4 h-4 mr-2" />
                      {tab.label}
                    </div>
                 ) : tab.label}
@@ -267,29 +269,24 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
         </div>
       </div>
 
-      {activeSegment === 'private' && !user ? (
+      {activeSegment === 'private' && !user && !isVoucherActive ? (
         <div className="bg-white rounded-3xl p-12 border border-gray-100 shadow-xl text-center max-w-2xl mx-auto py-16">
           <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
             <Lock className="text-indigo-600 w-10 h-10" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Área Exclusiva</h2>
           <p className="text-gray-600 mb-8 leading-relaxed">
-            Cadastre-se ou entre com sua conta Google agora para acessar cursos premium, 
-            materiais exclusivos e salvar seus conteúdos favoritos.
+            Esta área requer um código de acesso de 9 dígitos autorizado pelo administrador. 
+            Insira seu código para liberar os conteúdos exclusivos da plataforma.
           </p>
           <div className="flex flex-col space-y-4 items-center">
             <button 
-              onClick={() => {
-                const nav = document.querySelector('nav');
-                const loginBtn = nav?.querySelector('button[onClick*="handleLoginPopup"]');
-                if (loginBtn instanceof HTMLButtonElement) loginBtn.click();
-                else alert("Clique no botão 'Entrar' no topo da página.");
-              }}
+              onClick={onVoucherRequest}
               className="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold flex items-center justify-center shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all hover:scale-105"
             >
-              <LogIn className="w-5 h-5 mr-2" /> Começar Agora Gratuitamente
+              <LogIn className="w-5 h-5 mr-2" /> Digitar Código de Acesso
             </button>
-            <p className="text-xs text-gray-400">Acesso instantâneo via conta Google.</p>
+            <p className="text-xs text-gray-400">Solicite seu código com o administrador.</p>
           </div>
         </div>
       ) : (
@@ -298,11 +295,11 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
             {displayedCategories.map((category) => (
               <Link 
                 key={category.id} 
-                to={category.accessLevel === 'private' && !user ? '#' : `/category/${category.id}`}
+                to={category.accessLevel === 'private' && !user && !isVoucherActive && !isAdmin ? '#' : `/category/${category.id}`}
                 onClick={(e) => {
-                  if (category.accessLevel === 'private' && !user) {
+                  if (category.accessLevel === 'private' && !user && !isVoucherActive && !isAdmin) {
                     e.preventDefault();
-                    alert("Esta categoria é exclusiva para membros. Por favor, faça login para acessar.");
+                    onVoucherRequest();
                   }
                 }}
                 className="group bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative"
@@ -387,11 +384,13 @@ const Home = ({ categories, user, isAdmin }: { categories: Category[], user: Use
   );
 };
 
-const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { categories: Category[], contents: Content[], favorites: Favorite[], user: User | null, isAdmin: boolean }) => {
+const CategoryDetail = ({ categories, contents, favorites, user, isAdmin, onVoucherRequest }: { categories: Category[], contents: Content[], favorites: Favorite[], user: User | null, isAdmin: boolean, onVoucherRequest: () => void }) => {
   const { id } = useParams();
   const category = categories.find(c => c.id === id);
   const categoryContents = contents.filter(c => c.categoryId === id);
   const [search, setSearch] = useState('');
+
+  const isVoucherActive = !!localStorage.getItem('mindflow_voucher');
 
   const filteredContents = categoryContents.filter(c => {
     const matchesSearch = c.title.toLowerCase().includes(search.toLowerCase()) || 
@@ -403,7 +402,7 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
   const isFavorite = (contentId: string) => favorites.some(f => f.contentId === contentId);
 
   const toggleFavorite = async (contentId: string) => {
-    if (!user) return alert("Faça login para favoritar conteúdos");
+    if (!user) return alert("Faça login com sua conta Google para favoritar conteúdos");
     
     const existing = favorites.find(f => f.contentId === contentId && f.userId === user.uid);
     if (existing) {
@@ -425,7 +424,14 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
           <Link to="/" className="text-indigo-600 hover:text-indigo-700 text-sm font-medium flex items-center mb-2">
             <ChevronRight className="w-4 h-4 rotate-180 mr-1" /> Voltar para categorias
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">{category.name}</h1>
+          <div className="flex items-center space-x-3">
+            <h1 className="text-3xl font-bold text-gray-900">{category.name}</h1>
+            {category.accessLevel === 'private' && (
+              <span className="bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg text-xs font-bold uppercase border border-indigo-100 flex items-center">
+                <Lock className="w-3 h-3 mr-1" /> Exclusivo
+              </span>
+            )}
+          </div>
           <p className="text-gray-600 mt-1">{category.description}</p>
         </div>
         <div className="relative w-full md:w-80">
@@ -458,9 +464,9 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
                 {content.accessLevel === 'private' && (
                   <span className={cn(
                     "px-1.5 py-0.5 rounded text-[8px] font-bold uppercase",
-                    user ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
+                    (user || isVoucherActive) ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600 border border-amber-100"
                   )}>
-                    {user ? 'Acesso Liberado' : 'Premium'}
+                    {(user || isVoucherActive) ? 'Acesso Liberado' : 'Membro'}
                   </span>
                 )}
               </div>
@@ -477,22 +483,22 @@ const CategoryDetail = ({ categories, contents, favorites, user, isAdmin }: { ca
                 <Star className={cn("w-5 h-5", isFavorite(content.id) && "fill-current")} />
               </button>
               <Link 
-                to={content.accessLevel === 'private' && !user ? '#' : `/content/${content.id}`}
+                to={content.accessLevel === 'private' && !user && !isVoucherActive && !isAdmin ? '#' : `/content/${content.id}`}
                 onClick={(e) => {
-                  if (content.accessLevel === 'private' && !user) {
+                  if (content.accessLevel === 'private' && !user && !isVoucherActive && !isAdmin) {
                     e.preventDefault();
-                    alert("Acesso exclusivo para membros. Por favor, faça login.");
+                    onVoucherRequest();
                   }
                 }}
                 className={cn(
                   "px-4 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center",
-                  content.accessLevel === 'private' && !user 
+                  content.accessLevel === 'private' && !user && !isVoucherActive && !isAdmin
                     ? "bg-gray-100 text-gray-400 cursor-not-allowed" 
                     : "bg-gray-900 text-white hover:bg-indigo-600"
                 )}
               >
-                {content.accessLevel === 'private' && !user ? <Lock className="w-4 h-4 mr-2" /> : null}
-                {content.accessLevel === 'private' && !user ? 'Bloqueado' : 'Abrir conteúdo'}
+                {content.accessLevel === 'private' && !user && !isVoucherActive && !isAdmin ? <Lock className="w-4 h-4 mr-2" /> : null}
+                {content.accessLevel === 'private' && !user && !isVoucherActive && !isAdmin ? 'Bloqueado' : 'Abrir conteúdo'}
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Link>
             </div>
@@ -675,8 +681,9 @@ const ContentDetail = ({ contents }: { contents: Content[] }) => {
 };
 
 const Admin = ({ categories, contents, isAdmin }: { categories: Category[], contents: Content[], isAdmin: boolean }) => {
-  const [activeTab, setActiveTab] = useState<'categories' | 'contents'>('categories');
+  const [activeTab, setActiveTab] = useState<'categories' | 'contents' | 'accessCodes'>('categories');
   const [debugStatus, setDebugStatus] = useState<string | null>(null);
+  const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
   
   // Forms
   const [catForm, setCatForm] = useState({ name: '', description: '', imageUrl: '', isVisible: true, accessLevel: 'public' as 'public' | 'private' });
@@ -690,8 +697,35 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
     links: [] as ContentLink[],
     accessLevel: 'public' as 'public' | 'private'
   });
+  const [codeForm, setCodeForm] = useState({ code: '', label: '', isActive: true });
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
   const [editingContId, setEditingContId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const unsubCodes = onSnapshot(collection(db, 'accessCodes'), (snap) => {
+      setAccessCodes(snap.docs.map(d => ({ id: d.id, ...d.data() } as AccessCode)));
+    });
+    return () => unsubCodes();
+  }, [isAdmin]);
+
+  const generateCode = () => {
+    const code = Math.floor(100000000 + Math.random() * 900000000).toString();
+    setCodeForm({ ...codeForm, code });
+  };
+
+  const handleSaveCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!codeForm.code || codeForm.code.length !== 9) return alert("O código deve ter 9 dígitos.");
+    
+    await setDoc(doc(db, 'accessCodes', codeForm.code), {
+      code: codeForm.code,
+      label: codeForm.label,
+      isActive: codeForm.isActive,
+      createdAt: new Date().toISOString()
+    });
+    setCodeForm({ code: '', label: '', isActive: true });
+  };
 
   const testConnection = async () => {
     setDebugStatus("Testando...");
@@ -839,6 +873,12 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
             >
               Conteúdos
             </button>
+            <button 
+              onClick={() => setActiveTab('accessCodes')}
+              className={cn("px-4 py-2 rounded-lg text-sm font-medium transition-all", activeTab === 'accessCodes' ? "bg-white shadow-sm text-indigo-600" : "text-gray-500 hover:text-gray-700")}
+            >
+              Códigos de Acesso
+            </button>
           </div>
         </div>
       </div>
@@ -973,7 +1013,7 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'contents' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1">
             <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm sticky top-24">
@@ -1207,12 +1247,199 @@ const Admin = ({ categories, contents, isAdmin }: { categories: Category[], cont
             </div>
           </div>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-1">
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm sticky top-24">
+              <h2 className="text-lg font-bold mb-4 flex items-center">
+                <Plus className="w-5 h-5 mr-2 text-indigo-600" />
+                Autorizar Novo Código
+              </h2>
+              <form onSubmit={handleSaveCode} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Código (9 dígitos)</label>
+                  <div className="flex space-x-2">
+                    <input 
+                      type="text" 
+                      maxLength={9}
+                      className="flex-1 px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                      value={codeForm.code}
+                      onChange={e => setCodeForm({...codeForm, code: e.target.value.replace(/\D/g, '')})}
+                      placeholder="Ex: 123456789"
+                      required
+                    />
+                    <button 
+                      type="button" 
+                      onClick={generateCode}
+                      className="bg-gray-100 text-gray-600 px-3 py-2 rounded-xl text-xs font-bold hover:bg-gray-200"
+                    >
+                      Gerar
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Identificação / Nome Aluno</label>
+                  <input 
+                    type="text" 
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                    value={codeForm.label}
+                    onChange={e => setCodeForm({...codeForm, label: e.target.value})}
+                    placeholder="Ex: João Silva"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                      checked={codeForm.isActive}
+                      onChange={e => setCodeForm({...codeForm, isActive: e.target.checked})}
+                    />
+                    <span className="text-sm font-medium text-gray-700">Código Ativo</span>
+                  </label>
+                </div>
+                <button type="submit" className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg active:scale-95">
+                  Autorizar Código
+                </button>
+              </form>
+            </div>
+          </div>
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Código</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Aluno / Label</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Status</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Criado em</th>
+                    <th className="px-6 py-3 text-xs font-bold text-gray-500 uppercase">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {accessCodes.map(code => (
+                    <tr key={code.id}>
+                      <td className="px-6 py-4">
+                        <code className="bg-gray-100 px-2 py-1 rounded text-indigo-600 font-mono font-bold tracking-widest">{code.code}</code>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900 font-medium">{code.label || '-'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-2 py-1 rounded text-[10px] font-bold uppercase",
+                          code.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                        )}>
+                          {code.isActive ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-[10px] text-gray-500">{new Date(code.createdAt).toLocaleDateString()}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <button onClick={() => handleDelete('accessCodes', code.id)} className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors" title="Remover">
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {accessCodes.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-gray-500 italic">Nenhum código cadastrado ainda.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 };
 
 // --- Main App ---
+
+const VoucherModal = ({ isOpen, onClose, onValidate }: { isOpen: boolean, onClose: () => void, onValidate: (code: string) => Promise<boolean> }) => {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (code.length !== 9) return setError("O código deve ter 9 números.");
+    
+    setLoading(true);
+    setError(null);
+    const isValid = await onValidate(code);
+    setLoading(false);
+    
+    if (!isValid) {
+      setError("Código inválido ou inativo. Entre em contato com o administrador.");
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 animate-in zoom-in-95 duration-200">
+        <div className="relative h-24 bg-indigo-600 flex items-center justify-center">
+          <div className="absolute top-4 right-4">
+            <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-md">
+            <Lock className="text-white w-8 h-8" />
+          </div>
+        </div>
+        <div className="p-8">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-2">Acesso Exclusivo</h2>
+          <p className="text-center text-gray-500 text-sm mb-8">Insira o código de 9 dígitos fornecido pelo administrador para liberar seu acesso.</p>
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="relative">
+              <input 
+                type="text" 
+                maxLength={9}
+                className={cn(
+                  "w-full text-center text-3xl font-mono tracking-[0.5em] font-bold py-4 border-2 rounded-2xl focus:outline-none transition-all",
+                  error ? "border-red-200 bg-red-50 text-red-600" : "border-gray-100 bg-gray-50 focus:border-indigo-500 focus:bg-white"
+                )}
+                placeholder="000000000"
+                value={code}
+                onChange={e => {
+                  setError(null);
+                  setCode(e.target.value.replace(/\D/g, ''));
+                }}
+                disabled={loading}
+                autoFocus
+                required
+              />
+              {error && <p className="absolute -bottom-6 left-0 right-0 text-center text-red-500 text-[10px] font-bold">{error}</p>}
+            </div>
+            
+            <button 
+              type="submit" 
+              disabled={loading || code.length !== 9}
+              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 disabled:grayscale disabled:opacity-50 flex items-center justify-center"
+            >
+              {loading ? <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "Liberar Acesso"}
+            </button>
+            <button 
+              type="button"
+              onClick={onClose}
+              className="w-full text-gray-400 font-bold text-xs py-2 hover:text-gray-600 transition-colors"
+            >
+              Cancelar
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -1221,6 +1448,9 @@ export default function App() {
   const [contents, setContents] = useState<Content[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
+  const [voucherCode, setVoucherCode] = useState<string | null>(localStorage.getItem('mindflow_voucher'));
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -1231,9 +1461,26 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
+  const validateVoucher = async (code: string) => {
+    try {
+      const docRef = doc(db, 'accessCodes', code);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists() && docSnap.data().isActive) {
+        setVoucherCode(code);
+        localStorage.setItem('mindflow_voucher', code);
+        setIsVoucherModalOpen(false);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Error validating voucher:", e);
+      return false;
+    }
+  };
+
   useEffect(() => {
-    // Categories Listener - Broad query is now allowed by rules to ensure UI stability
-    // We sort and filter isVisible in memory to avoid composite index errors
+    // Categories Listener
     const qCats = query(collection(db, 'categories'));
 
     const unsubCats = onSnapshot(qCats, (snap) => {
@@ -1243,19 +1490,16 @@ export default function App() {
       console.error("Error fetching categories:", error);
     });
 
-    // Contents Listener - Query must still match security rules
+    // Contents Listener
     let qConts;
-    if (isAdmin || user) {
-      // Logged in: Can read all (security rules handle private content)
+    if (isAdmin || user || voucherCode) {
       qConts = query(collection(db, 'contents'));
     } else {
-      // Logged out: ONLY public contents allowed by security rules
       qConts = query(collection(db, 'contents'), where('accessLevel', '==', 'public'));
     }
 
     const unsubConts = onSnapshot(qConts, (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Content));
-      // Sort in memory by date descending
       setContents(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     }, (error) => {
       console.error("Error fetching contents:", error);
@@ -1265,7 +1509,7 @@ export default function App() {
       unsubCats();
       unsubConts();
     };
-  }, [isAdmin, user]);
+  }, [isAdmin, user, voucherCode]);
 
   useEffect(() => {
     if (user) {
@@ -1299,11 +1543,16 @@ export default function App() {
     <Router>
       <div className="min-h-screen bg-gray-50 font-sans text-gray-900 selection:bg-indigo-100 selection:text-indigo-900">
         <Navbar user={user} isAdmin={isAdmin} />
+        <VoucherModal 
+          isOpen={isVoucherModalOpen} 
+          onClose={() => setIsVoucherModalOpen(false)} 
+          onValidate={validateVoucher} 
+        />
         
         <main className="pb-20">
           <Routes>
-            <Route path="/" element={<Home categories={categories} user={user} isAdmin={isAdmin} />} />
-            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} isAdmin={isAdmin} />} />
+            <Route path="/" element={<Home categories={categories} user={user} isAdmin={isAdmin} onVoucherRequest={() => setIsVoucherModalOpen(true)} />} />
+            <Route path="/category/:id" element={<CategoryDetail categories={categories} contents={contents} favorites={favorites} user={user} isAdmin={isAdmin} onVoucherRequest={() => setIsVoucherModalOpen(true)} />} />
             <Route path="/content/:id" element={<ContentDetail contents={contents} />} />
             <Route path="/admin" element={<Admin categories={categories} contents={contents} isAdmin={isAdmin} />} />
             <Route path="*" element={<Navigate to="/" />} />
